@@ -34,6 +34,7 @@ public class VistaCreacion extends JFrame {
 
     // Componentes Pestaña 3: Crear Proceso
     private JTextField txtNombreProceso;
+    private JTextField txtInstruccionesProceso;
     private JTextField txtRamProceso;
     private JTextField txtPrioridadProceso;
     private JTextField txtDeadlineProceso;
@@ -117,6 +118,7 @@ public class VistaCreacion extends JFrame {
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
         txtNombreProceso = new JTextField("Proceso_1", 15);
+        txtInstruccionesProceso = new JTextField("20", 15);
         txtRamProceso = new JTextField("128", 15);
         txtPrioridadProceso = new JTextField("1", 15);
         txtDeadlineProceso = new JTextField("10", 15);
@@ -124,16 +126,17 @@ public class VistaCreacion extends JFrame {
         txtCompProceso = new JTextField("1", 15);
 
         agregarFila(panel, gbc, 0, "Nombre del Proceso:", txtNombreProceso);
-        agregarFila(panel, gbc, 1, "Memoria RAM (MB):", txtRamProceso);
-        agregarFila(panel, gbc, 2, "Prioridad (1-5):", txtPrioridadProceso);
-        agregarFila(panel, gbc, 3, "Deadline (Ciclos):", txtDeadlineProceso);
-        agregarFila(panel, gbc, 4, "Tipo de Proceso:", cbTipoProceso);
-        agregarFila(panel, gbc, 5, "Computador Asignado:", txtCompProceso);
+        agregarFila(panel, gbc, 1, "Cantidad de instrucciones:", txtInstruccionesProceso);
+        agregarFila(panel, gbc, 2, "Memoria RAM (MB):", txtRamProceso);
+        agregarFila(panel, gbc, 3, "Prioridad (1-5):", txtPrioridadProceso);
+        agregarFila(panel, gbc, 4, "Deadline (Ciclos):", txtDeadlineProceso);
+        agregarFila(panel, gbc, 5, "Tipo de Proceso:", cbTipoProceso);
+        agregarFila(panel, gbc, 6, "Computador Asignado:", txtCompProceso);
 
         JButton btnCrearProceso = new JButton("Guardar / Crear Proceso");
         btnCrearProceso.addActionListener(e -> crearYEncolarProcesoAccion());
 
-        gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 2;
+        gbc.gridx = 0; gbc.gridy = 7; gbc.gridwidth = 2;
         gbc.insets = new Insets(12, 12, 8, 12);
         panel.add(btnCrearProceso, gbc);
 
@@ -188,13 +191,14 @@ public class VistaCreacion extends JFrame {
     private void crearYEncolarProcesoAccion() {
         try {
             String nombre = txtNombreProceso.getText().trim();
+            int instrucciones = Integer.parseInt(txtInstruccionesProceso.getText().trim());
             int ram = Integer.parseInt(txtRamProceso.getText().trim());
             int prioridad = Integer.parseInt(txtPrioridadProceso.getText().trim());
             int deadline = Integer.parseInt(txtDeadlineProceso.getText().trim());
             TipoProceso tipo = convertirTipo(cbTipoProceso.getSelectedItem().toString());
             int computador = Integer.parseInt(txtCompProceso.getText().trim());
 
-            Proceso nuevoProceso = new Proceso(nombre, ram, prioridad, deadline, tipo, computador);
+            Proceso nuevoProceso = new Proceso(nombre, instrucciones, ram, prioridad, deadline, tipo, computador);
 
             colaProcesos.encolar(nuevoProceso);
 
@@ -204,6 +208,7 @@ public class VistaCreacion extends JFrame {
                     "¡Proceso encolado con éxito!\n\n" +
                             "ID: " + nuevoProceso.getId() + "\n" +
                             "Nombre: " + nuevoProceso.getNombre() + "\n" +
+                            "Instrucciones: " + nuevoProceso.getInstruccionesTotales() + "\n" +
                             "RAM: " + nuevoProceso.getMemoriaRAM() + " MB\n" +
                             "Tipo: " + nuevoProceso.getTipo() + "\n" +
                             "Total de procesos en cola: " + colaProcesos.getTamano(),
