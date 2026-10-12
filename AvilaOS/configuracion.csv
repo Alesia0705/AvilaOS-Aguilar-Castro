@@ -1,0 +1,5 @@
+Parametro,Valor
+duracionCiclo,1000
+numComputadores,3
+ramPorComp,2
+latenciaRed,2
