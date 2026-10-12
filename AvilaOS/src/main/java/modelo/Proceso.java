@@ -28,6 +28,10 @@ public class Proceso {
     private int pc;
     private int mar;
     private MotivoBloqueo motivoBloqueo;
+    private long cicloLlegada;
+    private long cicloPrimeraEjecucion = -1;
+    private long cicloFinalizacion = -1;
+    private int ciclosBloqueado;
 
     /**
      * Constructor para instanciar un nuevo proceso desde la GUI.
@@ -73,7 +77,7 @@ public class Proceso {
         tiempoRestante--;
     }
 
-    /**
+        /**
      * Descuenta un ciclo del deadline (si llega a 0, el proceso debe terminarse).
      */
     public void decrementarDeadline() {
@@ -81,6 +85,24 @@ public class Proceso {
             deadline--;
         }
     }
+
+    // --- Métricas ---
+    public long getCicloLlegada() { return cicloLlegada; }
+    public long getCicloPrimeraEjecucion() { return cicloPrimeraEjecucion; }
+    public long getCicloFinalizacion() { return cicloFinalizacion; }
+    public int getCiclosBloqueado() { return ciclosBloqueado; }
+
+    public void setCicloLlegada(long cicloLlegada) { this.cicloLlegada = cicloLlegada; }
+    public void setCicloPrimeraEjecucion(long ciclo) { this.cicloPrimeraEjecucion = ciclo; }
+    public void setCicloFinalizacion(long ciclo) { this.cicloFinalizacion = ciclo; }
+
+    /**
+     * Suma un ciclo al tiempo que el proceso lleva bloqueado.
+     */
+    public void incrementarCiclosBloqueado() {
+        ciclosBloqueado++;
+    }
+
     @Override
     public String toString() {
         return "Proceso{" + "ID=" + id + ", Nombre='" + nombre + '\'' + ", RAM=" + memoriaRAM + "MB, Tipo='" + tipo + '\'' + '}';
