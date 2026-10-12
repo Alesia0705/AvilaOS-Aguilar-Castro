@@ -8,6 +8,7 @@ import util.LogEventos;
 
 import javax.swing.*;
 import java.awt.*;
+import modelo.enums.TipoProceso;
 
 /**
  * Vista 1: Interfaz gráfica Swing para la configuración inicial de ÁvilaOS.
@@ -191,7 +192,7 @@ public class VistaCreacion extends JFrame {
             int ram = Integer.parseInt(txtRamProceso.getText().trim());
             int prioridad = Integer.parseInt(txtPrioridadProceso.getText().trim());
             int deadline = Integer.parseInt(txtDeadlineProceso.getText().trim());
-            String tipo = cbTipoProceso.getSelectedItem().toString();
+            TipoProceso tipo = convertirTipo(cbTipoProceso.getSelectedItem().toString());
             int computador = Integer.parseInt(txtCompProceso.getText().trim());
 
             Proceso nuevoProceso = new Proceso(contadorProcesoID++, nombre, ram, prioridad, deadline, tipo, computador);
@@ -215,7 +216,18 @@ public class VistaCreacion extends JFrame {
             JOptionPane.showMessageDialog(this, "Por favor ingrese números válidos en RAM, Prioridad, Deadline y Computador.", "Error de Formato", JOptionPane.ERROR_MESSAGE);
         }
     }
-
+/**
+ * Convierte el texto elegido en el desplegable al enum correspondiente.
+ */
+private TipoProceso convertirTipo(String texto) {
+    switch (texto) {
+        case "CPU Bound": return TipoProceso.CPU_BOUND;
+        case "IO Bound": return TipoProceso.IO_BOUND;
+        case "Productor": return TipoProceso.PRODUCTOR;
+        case "Consumidor": return TipoProceso.CONSUMIDOR;
+        default: throw new IllegalArgumentException("Tipo de proceso desconocido: " + texto);
+    }
+}
     public ColaProcesos getColaProcesos() {
         return colaProcesos;
     }
