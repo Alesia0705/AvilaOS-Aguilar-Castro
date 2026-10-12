@@ -7,6 +7,12 @@ import modelo.enums.TipoProceso;
  */
 public class Proceso {
 
+// Contador compartido por todos los procesos: garantiza IDs únicos en todo el sistema
+private static int siguienteId = 1;
+
+private static synchronized int generarId() {
+    return siguienteId++;
+}
     private int id;
     private String nombre;
     private int memoriaRAM;
@@ -19,8 +25,8 @@ public class Proceso {
     /**
      * Constructor para instanciar un nuevo proceso desde la GUI.
      */
-    public Proceso(int id, String nombre, int memoriaRAM, int prioridad, int deadline, TipoProceso tipo, int computadorAsignado) {
-        this.id = id;
+    public Proceso(String nombre, int memoriaRAM, int prioridad, int deadline, TipoProceso tipo, int computadorAsignado) {
+        this.id = generarId();
         this.nombre = nombre;
         this.memoriaRAM = memoriaRAM;
         this.prioridad = prioridad;

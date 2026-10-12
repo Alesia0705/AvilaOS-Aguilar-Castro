@@ -19,7 +19,6 @@ public class VistaCreacion extends JFrame {
     // Estructuras de datos del sistema y utilidades
     private final ColaProcesos colaProcesos = new ColaProcesos();
     private final LogEventos logEventos = new LogEventos(100); // Se especifica capacidad inicial (100 eventos)
-    private int contadorProcesoID = 1;
 
     // Componentes Pestaña 1: Configuración Global
     private JTextField txtDuracionCiclo;
@@ -195,7 +194,7 @@ public class VistaCreacion extends JFrame {
             TipoProceso tipo = convertirTipo(cbTipoProceso.getSelectedItem().toString());
             int computador = Integer.parseInt(txtCompProceso.getText().trim());
 
-            Proceso nuevoProceso = new Proceso(contadorProcesoID++, nombre, ram, prioridad, deadline, tipo, computador);
+            Proceso nuevoProceso = new Proceso(nombre, ram, prioridad, deadline, tipo, computador);
 
             colaProcesos.encolar(nuevoProceso);
 
@@ -210,7 +209,7 @@ public class VistaCreacion extends JFrame {
                             "Total de procesos en cola: " + colaProcesos.getTamano(),
                     "Proceso Registrado", JOptionPane.INFORMATION_MESSAGE);
 
-            txtNombreProceso.setText("Proceso_" + contadorProcesoID);
+            txtNombreProceso.setText("Proceso_" + (nuevoProceso.getId() + 1));
 
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "Por favor ingrese números válidos en RAM, Prioridad, Deadline y Computador.", "Error de Formato", JOptionPane.ERROR_MESSAGE);
