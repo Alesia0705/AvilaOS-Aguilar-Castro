@@ -1,16 +1,15 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- */
-
 package avilaos;
 
+import gui.VistaCreacion;
+
 /**
- *
- * @author Usuario
+ * Clase principal de inicio para ÁvilaOS.
  */
 public class AvilaOS {
 
     public static void main(String[] args) {
-        System.out.println("Hello World!");
+        javax.swing.SwingUtilities.invokeLater(() -> {
+            new VistaCreacion().setVisible(true);
+        });
     }
 }
