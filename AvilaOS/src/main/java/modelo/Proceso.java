@@ -1,31 +1,55 @@
 package modelo;
+import modelo.enums.EstadoProceso;
+import modelo.enums.TipoProceso;
+import modelo.enums.MotivoBloqueo;
 
 /**
  * Representa un proceso dentro del simulador ÁvilaOS.
  */
 public class Proceso {
 
+    // Contador compartido por todos los procesos: garantiza IDs únicos en todo el sistema
+    private static int siguienteId = 1;
+
+    private static synchronized int generarId() {
+        return siguienteId++;
+    }
+
     private int id;
     private String nombre;
     private int memoriaRAM;
     private int prioridad;
     private int deadline;
-    private String tipo; // "CPU Bound", "IO Bound", "Productor", "Consumidor"
+    private TipoProceso tipo;
     private int computadorAsignado;
-    private String estado; // "LISTO", "EJECUCION", "BLOQUEADO", "TERMINADO"
+    private EstadoProceso estado;
+    private int instruccionesTotales;
+    private int tiempoRestante;
+    private int pc;
+    private int mar;
+    private MotivoBloqueo motivoBloqueo;
+    private long cicloLlegada;
+    private long cicloPrimeraEjecucion = -1;
+    private long cicloFinalizacion = -1;
+    private int ciclosBloqueado;
 
     /**
      * Constructor para instanciar un nuevo proceso desde la GUI.
      */
-    public Proceso(int id, String nombre, int memoriaRAM, int prioridad, int deadline, String tipo, int computadorAsignado) {
-        this.id = id;
+    public Proceso(String nombre, int instruccionesTotales, int memoriaRAM, int prioridad, int deadline, TipoProceso tipo, int computadorAsignado) {
+        this.id = generarId();
         this.nombre = nombre;
         this.memoriaRAM = memoriaRAM;
         this.prioridad = prioridad;
         this.deadline = deadline;
         this.tipo = tipo;
         this.computadorAsignado = computadorAsignado;
-        this.estado = "LISTO";
+        this.estado = EstadoProceso.NUEVO;
+        this.instruccionesTotales = instruccionesTotales;
+        this.tiempoRestante = instruccionesTotales;
+        this.pc = 0;
+        this.mar = 0;
+        this.motivoBloqueo = MotivoBloqueo.NINGUNO;
     }
 
     // Getters y Setters
@@ -34,11 +58,50 @@ public class Proceso {
     public int getMemoriaRAM() { return memoriaRAM; }
     public int getPrioridad() { return prioridad; }
     public int getDeadline() { return deadline; }
-    public String getTipo() { return tipo; }
+    public TipoProceso getTipo() { return tipo; }
     public int getComputadorAsignado() { return computadorAsignado; }
-    public String getEstado() { return estado; }
+    public EstadoProceso getEstado() { return estado; }
+    public void setEstado(EstadoProceso estado) { this.estado = estado; }
+    public int getInstruccionesTotales() { return instruccionesTotales; }
+    public int getTiempoRestante() { return tiempoRestante; }
+    public int getPc() { return pc; }
+    public int getMar() { return mar; }
+    public MotivoBloqueo getMotivoBloqueo() { return motivoBloqueo; }
+    public void setMotivoBloqueo(MotivoBloqueo motivoBloqueo) { this.motivoBloqueo = motivoBloqueo; }
+    /**
+     * Ejecuta una instrucción: PC y MAR avanzan 1 y baja el tiempo restante.
+     */
+    public void ejecutarInstruccion() {
+        pc++;
+        mar++;
+        tiempoRestante--;
+    }
 
-    public void setEstado(String estado) { this.estado = estado; }
+        /**
+     * Descuenta un ciclo del deadline (si llega a 0, el proceso debe terminarse).
+     */
+    public void decrementarDeadline() {
+        if (deadline > 0) {
+            deadline--;
+        }
+    }
+
+    // --- Métricas ---
+    public long getCicloLlegada() { return cicloLlegada; }
+    public long getCicloPrimeraEjecucion() { return cicloPrimeraEjecucion; }
+    public long getCicloFinalizacion() { return cicloFinalizacion; }
+    public int getCiclosBloqueado() { return ciclosBloqueado; }
+
+    public void setCicloLlegada(long cicloLlegada) { this.cicloLlegada = cicloLlegada; }
+    public void setCicloPrimeraEjecucion(long ciclo) { this.cicloPrimeraEjecucion = ciclo; }
+    public void setCicloFinalizacion(long ciclo) { this.cicloFinalizacion = ciclo; }
+
+    /**
+     * Suma un ciclo al tiempo que el proceso lleva bloqueado.
+     */
+    public void incrementarCiclosBloqueado() {
+        ciclosBloqueado++;
+    }
 
     @Override
     public String toString() {
