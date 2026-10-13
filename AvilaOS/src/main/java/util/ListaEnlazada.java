@@ -55,6 +55,21 @@ public class ListaEnlazada<T> {
         return dato;
     }
     
+        /**
+     * Devuelve el elemento de la posición indicada sin sacarlo de la lista.
+     * La posición 0 es el primer elemento. Devuelve null si el índice no es válido.
+     */
+    public T obtener(int indice) {
+        if (indice < 0 || indice >= tamano) {
+            return null;
+        }
+        Nodo<T> actual = cabeza;
+        for (int i = 0; i < indice; i++) {
+            actual = actual.getSiguiente();
+        }
+        return actual.getDato();
+    }
+    
     public int getTamano() { return tamano; }
 
     public boolean estaVacia() { return tamano == 0; }
