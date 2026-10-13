@@ -8,11 +8,14 @@ import util.LogEventos;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 import modelo.enums.TipoProceso;
 
 /**
  * Vista 1: Interfaz gráfica Swing para la configuración inicial de ÁvilaOS.
- * Permite definir parámetros globales, crear buffers e instanciar/encolar procesos reales en ColaProcesos.
+ * Permite definir parámetros globales, RAM y política por computador (Issue 2),
+ * crear buffers e instanciar/encolar procesos reales con campos dinámicos (Issue 1).
  */
 public class VistaCreacion extends JFrame {
 
@@ -20,12 +23,16 @@ public class VistaCreacion extends JFrame {
     private final ColaProcesos colaProcesos = new ColaProcesos();
     private final LogEventos logEventos = new LogEventos(100);
 
-    // Componentes Pestaña 1: Configuración Global
+    // Componentes Pestaña 1: Configuración Global Parámetros Generales
     private JTextField txtDuracionCiclo;
     private JTextField txtQuantum;
     private JTextField txtLatenciaRed;
     private JTextField txtNumComputadores;
-    private JTextField txtRamPorComp;
+
+    // Componentes Dinámicos Pestaña 1 (Issue 2: Configuración por Computador)
+    private JPanel panelDetalleComputadores;
+    private final List<JTextField> listaTxtRamComps = new ArrayList<>();
+    private final List<JComboBox<String>> listaCbPoliticaComps = new ArrayList<>();
 
     // Componentes Pestaña 2: Crear Buffer
     private JTextField txtBufferId;
@@ -41,7 +48,7 @@ public class VistaCreacion extends JFrame {
     private JComboBox<String> cbTipoProceso;
     private JTextField txtCompProceso;
 
-    // Componentes Dinámicos (Issue 1)
+    // Componentes Dinámicos Pestaña 3 (Issue 1)
     private JLabel lblCiclosCpu;
     private JTextField txtCiclosCpu;
 
@@ -60,7 +67,7 @@ public class VistaCreacion extends JFrame {
     public VistaCreacion() {
         super("ÁvilaOS - Vista 1: Configuración del Sistema");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(600, 580);
+        setSize(650, 680);
         setLocationRelativeTo(null);
 
         JTabbedPane tabbedPane = new JTabbedPane();
@@ -72,33 +79,99 @@ public class VistaCreacion extends JFrame {
         add(tabbedPane);
     }
 
-    // --- Panel 1: Configuración Global ---
+    // --- Panel 1: Configuración Global (Issue 2) ---
     private JPanel crearPanelConfigGlobal() {
-        JPanel panel = new JPanel(new GridBagLayout());
+        JPanel panelPrincipal = new JPanel(new BorderLayout(10, 10));
+        panelPrincipal.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel panelGenerales = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(8, 12, 8, 12);
+        gbc.insets = new Insets(6, 12, 6, 12);
         gbc.fill = GridBagConstraints.HORIZONTAL;
 
-        txtDuracionCiclo = new JTextField("1000", 15);
-        txtQuantum = new JTextField("3", 15);
-        txtLatenciaRed = new JTextField("2", 15);
-        txtNumComputadores = new JTextField("2", 15);
-        txtRamPorComp = new JTextField("1024", 15);
+        txtDuracionCiclo = new JTextField("1000", 12);
+        txtQuantum = new JTextField("3", 12);
+        txtLatenciaRed = new JTextField("2", 12);
+        txtNumComputadores = new JTextField("2", 12);
 
-        agregarFila(panel, gbc, 0, "Duración de ciclo (ms):", txtDuracionCiclo);
-        agregarFila(panel, gbc, 1, "Quantum Round Robin:", txtQuantum);
-        agregarFila(panel, gbc, 2, "Latencia de Red (ciclos):", txtLatenciaRed);
-        agregarFila(panel, gbc, 3, "Número de Computadores:", txtNumComputadores);
-        agregarFila(panel, gbc, 4, "RAM por Computador (MB):", txtRamPorComp);
+        agregarFila(panelGenerales, gbc, 0, "Duración de ciclo (ms):", txtDuracionCiclo);
+        agregarFila(panelGenerales, gbc, 1, "Quantum Round Robin:", txtQuantum);
+        agregarFila(panelGenerales, gbc, 2, "Latencia de Red (ciclos):", txtLatenciaRed);
 
-        JButton btnGuardar = new JButton("Guardar en CSV");
+        // Fila de Número de Computadores con botón de actualización
+        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 1;
+        panelGenerales.add(new JLabel("Número de Computadores:"), gbc);
+
+        JPanel panelCompInput = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
+        panelCompInput.add(txtNumComputadores);
+        JButton btnAplicarComps = new JButton("Aplicar PCs");
+        btnAplicarComps.addActionListener(e -> generarCamposComputadores());
+        panelCompInput.add(btnAplicarComps);
+
+        gbc.gridx = 1;
+        panelGenerales.add(panelCompInput, gbc);
+
+        // Panel contenedor dinámico de RAM y Política por Computador
+        panelDetalleComputadores = new JPanel();
+        panelDetalleComputadores.setLayout(new BoxLayout(panelDetalleComputadores, BoxLayout.Y_AXIS));
+        JScrollPane scrollComputadores = new JScrollPane(panelDetalleComputadores);
+        scrollComputadores.setBorder(BorderFactory.createTitledBorder("Configuración por Computador (RAM y Política Inicial)"));
+        scrollComputadores.setPreferredSize(new Dimension(580, 220));
+
+        // Botón Guardar
+        JButton btnGuardar = new JButton("Guardar Configuración Global en CSV");
         btnGuardar.addActionListener(e -> guardarConfiguracionCSV());
 
-        gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 2;
-        gbc.insets = new Insets(15, 12, 8, 12);
-        panel.add(btnGuardar, gbc);
+        panelPrincipal.add(panelGenerales, BorderLayout.NORTH);
+        panelPrincipal.add(scrollComputadores, BorderLayout.CENTER);
+        panelPrincipal.add(btnGuardar, BorderLayout.SOUTH);
 
-        return panel;
+        // Estado inicial con 2 computadores
+        generarCamposComputadores();
+
+        return panelPrincipal;
+    }
+
+    /**
+     * Genera dinámicamente las casillas de RAM y Selección de Política para cada Computador (Issue 2).
+     */
+    private void generarCamposComputadores() {
+        Integer numComps = validarRangoEntero(txtNumComputadores.getText(), "Número de Computadores", 1, 10);
+        if (numComps == null) return;
+
+        panelDetalleComputadores.removeAll();
+        listaTxtRamComps.clear();
+        listaCbPoliticaComps.clear();
+
+        String[] politicasDisponibles = new String[]{"Round Robin", "FCFS", "Prioridades", "SRTF"};
+
+        for (int i = 1; i <= numComps; i++) {
+            JPanel panelPC = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 5));
+            panelPC.setBorder(BorderFactory.createEtchedBorder());
+
+            JLabel lblPC = new JLabel("PC " + i + ":");
+            lblPC.setFont(lblPC.getFont().deriveFont(Font.BOLD));
+
+            JLabel lblRam = new JLabel("RAM (MB):");
+            JTextField txtRam = new JTextField("1024", 8);
+
+            JLabel lblPolitica = new JLabel("Política:");
+            JComboBox<String> cbPolitica = new JComboBox<>(politicasDisponibles);
+
+            panelPC.add(lblPC);
+            panelPC.add(lblRam);
+            panelPC.add(txtRam);
+            panelPC.add(lblPolitica);
+            panelPC.add(cbPolitica);
+
+            listaTxtRamComps.add(txtRam);
+            listaCbPoliticaComps.add(cbPolitica);
+
+            panelDetalleComputadores.add(panelPC);
+        }
+
+        panelDetalleComputadores.revalidate();
+        panelDetalleComputadores.repaint();
     }
 
     // --- Panel 2: Crear Buffer ---
@@ -282,7 +355,7 @@ public class VistaCreacion extends JFrame {
         return num;
     }
 
-    // Lógica 1: Guardar Configuración Global en CSV
+    // Lógica 1: Guardar Configuración Global en CSV (Issue 2)
     private void guardarConfiguracionCSV() {
         Integer ciclo = validarEnteroPositivo(txtDuracionCiclo.getText(), "Duración de Ciclo");
         if (ciclo == null) return;
@@ -293,18 +366,26 @@ public class VistaCreacion extends JFrame {
         Integer latencia = validarEnteroPositivo(txtLatenciaRed.getText(), "Latencia de Red");
         if (latencia == null) return;
 
-        Integer comps = validarEnteroPositivo(txtNumComputadores.getText(), "Número de Computadores");
+        Integer comps = validarRangoEntero(txtNumComputadores.getText(), "Número de Computadores", 1, 10);
         if (comps == null) return;
 
-        Integer ramComp = validarEnteroPositivo(txtRamPorComp.getText(), "RAM por Computador");
-        if (ramComp == null) return;
+        // Validar cada computador (RAM y Política)
+        StringBuilder resumenConfig = new StringBuilder();
+        for (int i = 0; i < listaTxtRamComps.size(); i++) {
+            Integer ramPC = validarEnteroPositivo(listaTxtRamComps.get(i).getText(), "RAM PC " + (i + 1));
+            if (ramPC == null) return;
+
+            String politicaPC = (String) listaCbPoliticaComps.get(i).getSelectedItem();
+            resumenConfig.append("PC ").append(i + 1).append(" [RAM: ").append(ramPC).append("MB, Política: ").append(politicaPC).append("] | ");
+        }
 
         try {
             GestorArchivo.guardarConfiguracion("configuracion.csv", ciclo, quantum, latencia, comps);
-            logEventos.registrar(0L, "Configuración global guardada en configuracion.csv");
+            logEventos.registrar(0L, "Configuración global guardada en configuracion.csv: " + resumenConfig);
 
             JOptionPane.showMessageDialog(this, 
-                    "Configuración guardada exitosamente en configuracion.csv", 
+                    "Configuración guardada exitosamente en configuracion.csv\n\n" +
+                    "Resumen de Computadores:\n" + resumenConfig.toString().replace(" | ", "\n"), 
                     "Éxito", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error al guardar configuración: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
