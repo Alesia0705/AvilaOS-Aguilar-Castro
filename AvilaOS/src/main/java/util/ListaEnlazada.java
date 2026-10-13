@@ -38,7 +38,23 @@ public class ListaEnlazada<T> {
         }
         tamano++;
     }
-
+        /**
+     * Saca el primer elemento de la lista y lo devuelve.
+     * Devuelve null si la lista está vacía.
+     */
+    public T quitarPrimero() {
+        if (cabeza == null) {
+            return null;
+        }
+        T dato = cabeza.getDato();
+        cabeza = cabeza.getSiguiente();
+        if (cabeza == null) {
+            cola = null;
+        }
+        tamano--;
+        return dato;
+    }
+    
     public int getTamano() { return tamano; }
 
     public boolean estaVacia() { return tamano == 0; }
