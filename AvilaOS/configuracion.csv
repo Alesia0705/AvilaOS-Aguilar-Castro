@@ -1,5 +1,10 @@
-Parametro,Valor
-duracionCiclo,1000
-numComputadores,3
-ramPorComp,2
-latenciaRed,2
+# PARAMETROS GLOBALES
+DuracionCiclo,Quantum,LatenciaRed,NumComputadores
+1000,3,2,4
+
+# CONFIGURACION POR COMPUTADOR
+ID_PC,RAM_MB,PoliticaInicial
+1,1024,Round Robin
+2,1024,Round Robin
+3,1024,Round Robin
+4,1024,Round Robin

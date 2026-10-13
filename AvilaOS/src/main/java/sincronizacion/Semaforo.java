@@ -1,5 +1,7 @@
 package sincronizacion;
 
+import modelo.Proceso;
+
 /**
  * Representación de un semáforo de sincronización en ÁvilaOS.
  * Permite controlar el acceso a recursos compartidos bloqueando procesos en su cola propia.
@@ -26,7 +28,7 @@ public class Semaforo {
      * @param proceso Proceso que solicita el recurso.
      * @return true si el proceso pudo continuar, false si fue bloqueado en la cola.
      */
-    public synchronized boolean semWait(Object proceso) {
+    public synchronized boolean semWait(Proceso proceso) {
         valor--;
         if (valor < 0) {
             colaBloqueados.encolar(proceso);
@@ -40,10 +42,10 @@ public class Semaforo {
      * Incrementa el contador. Si hay procesos esperando, despierta al primero de la cola.
      * @return El proceso liberado para pasar a estado LISTO, o null si no había ninguno esperando.
      */
-    public synchronized Object semSignal() {
+    public synchronized Proceso semSignal() {
         valor++;
         if (valor <= 0) {
-            Object procesoDesbloqueado = colaBloqueados.desencolar();
+            Proceso procesoDesbloqueado = colaBloqueados.desencolar();
             if (procesoDesbloqueado != null) {
                 return procesoDesbloqueado;
             }

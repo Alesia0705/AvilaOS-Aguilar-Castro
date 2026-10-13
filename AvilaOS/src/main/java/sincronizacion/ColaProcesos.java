@@ -1,82 +1,60 @@
 package sincronizacion;
 
-/**
- * Estructura de nodo simple para la lista enlazada propia.
- * Almacena la referencia a un proceso y al siguiente nodo de la cola.
- */
-class NodoProceso {
-    private Object proceso;
-    private NodoProceso siguiente;
-
-    /**
-     * Constructor del nodo.
-     * @param proceso Objeto proceso que se almacenará en el nodo.
-     */
-    public NodoProceso(Object proceso) {
-        this.proceso = proceso;
-        this.siguiente = null;
-    }
-
-    public Object getProceso() { return proceso; }
-    public NodoProceso getSiguiente() { return siguiente; }
-    public void setSiguiente(NodoProceso siguiente) { this.siguiente = siguiente; }
-}
+import modelo.Proceso;
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Queue;
 
 /**
- * Estructura de datos dinámica (Cola FIFO) programada desde cero.
- * Cumple con la restricción de no utilizar las colecciones de java.util.
+ * Representa la cola de procesos en espera o listos para ejecución en ÁvilaOS.
+ * Implementa concurrencia segura para permitir operaciones sincronizadas.
  */
 public class ColaProcesos {
-    private NodoProceso cabeza;
-    private NodoProceso cola;
-    private int tamano;
+
+    private final Queue<Proceso> cola = new LinkedList<>();
 
     /**
-     * Inicializa una cola vacía.
+     * Agrega un proceso a la cola.
      */
-    public ColaProcesos() {
-        this.cabeza = null;
-        this.cola = null;
-        this.tamano = 0;
-    }
-
-    /**
-     * Inserta un nuevo proceso al final de la cola.
-     * @param proceso Proceso a encolar.
-     */
-    public synchronized void encolar(Object proceso) {
-        NodoProceso nuevo = new NodoProceso(proceso);
-        if (estaVacia()) {
-            cabeza = nuevo;
-        } else {
-            cola.setSiguiente(nuevo);
+    public synchronized void encolar(Proceso proceso) {
+        if (proceso != null) {
+            cola.add(proceso);
         }
-        cola = nuevo;
-        tamano++;
     }
 
     /**
-     * Extrae y retorna el primer proceso de la cola (FIFO).
-     * @return El proceso extraído o null si la cola está vacía.
+     * Desencola y retorna el primer proceso en la cola.
      */
-    public synchronized Object desencolar() {
-        if (estaVacia()) return null;
-        Object proceso = cabeza.getProceso();
-        cabeza = cabeza.getSiguiente();
-        if (cabeza == null) cola = null;
-        tamano--;
-        return proceso;
+    public synchronized Proceso desencolar() {
+        return cola.poll();
     }
 
     /**
-     * Verifica si la cola no contiene elementos.
-     * @return true si está vacía, false en caso contrario.
+     * Consulta el primer proceso de la cola sin removerlo.
      */
-    public boolean estaVacia() { return cabeza == null; }
+    public synchronized Proceso obtenerPrimero() {
+        return cola.peek();
+    }
 
     /**
-     * Obtiene la cantidad de procesos actualmente encolados.
-     * @return Número de elementos en la cola.
+     * Retorna la cantidad total de procesos actualmente en cola.
      */
-    public int getTamano() { return tamano; }
+    public synchronized int getTamano() {
+        return cola.size();
+    }
+
+    /**
+     * Verifica si la cola no contiene procesos.
+     */
+    public synchronized boolean estaVacia() {
+        return cola.isEmpty();
+    }
+
+    /**
+     * Retorna una copia de la lista de procesos para iteración, exportación o renderizado GUI.
+     */
+    public synchronized List<Proceso> obtenerListaProcesos() {
+        return new ArrayList<>(cola);
+    }
 }
