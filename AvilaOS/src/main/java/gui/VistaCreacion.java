@@ -415,7 +415,7 @@ public class VistaCreacion extends JFrame {
         }
     }
 
-    // Lógica 3: Instanciar Proceso y Encolar en ColaProcesos
+    // Lógica 3: Instanciar Proceso, Asignar Datos Dinámicos y Encolar en ColaProcesos
     private void crearYEncolarProcesoAccion() {
         String nombre = txtNombreProceso.getText().trim();
         if (!esCampoTextoValido(nombre, "Nombre del Proceso")) return;
@@ -435,27 +435,38 @@ public class VistaCreacion extends JFrame {
         Integer computador = validarEnteroPositivo(txtCompProceso.getText(), "Computador Asignado");
         if (computador == null) return;
 
-        // Validaciones dinámicas según el tipo seleccionado (Issue 1)
         String tipoTexto = cbTipoProceso.getSelectedItem().toString();
-        switch (tipoTexto) {
-            case "CPU Bound":
-                if (validarEnteroPositivo(txtCiclosCpu.getText(), "Ciclos CPU") == null) return;
-                break;
-            case "IO Bound":
-                if (validarEnteroPositivo(txtCiclosIo.getText(), "Ciclos I/O") == null) return;
-                break;
-            case "Productor":
-            case "Consumidor":
-                if (!esCampoTextoValido(txtBufferProceso.getText(), "ID del Buffer")) return;
-                if (validarEnteroPositivo(txtCiclosProdCons.getText(), "Ciclos Prod/Cons") == null) return;
-                if (validarEnteroPositivo(txtCantElementos.getText(), "Cantidad Elementos") == null) return;
-                break;
-        }
-
         TipoProceso tipo = convertirTipo(tipoTexto);
 
         try {
             Proceso nuevoProceso = new Proceso(nombre, instrucciones, ram, prioridad, deadline, tipo, computador);
+
+            // Validaciones y asignación de atributos dinámicos (Issue 1)
+            switch (tipoTexto) {
+                case "CPU Bound":
+                    Integer cCpu = validarEnteroPositivo(txtCiclosCpu.getText(), "Ciclos CPU");
+                    if (cCpu == null) return;
+                    nuevoProceso.setCiclosCpu(cCpu);
+                    break;
+                case "IO Bound":
+                    Integer cIo = validarEnteroPositivo(txtCiclosIo.getText(), "Ciclos I/O");
+                    if (cIo == null) return;
+                    nuevoProceso.setCiclosIo(cIo);
+                    break;
+                case "Productor":
+                case "Consumidor":
+                    String idBuf = txtBufferProceso.getText().trim();
+                    if (!esCampoTextoValido(idBuf, "ID del Buffer")) return;
+                    Integer cPC = validarEnteroPositivo(txtCiclosProdCons.getText(), "Ciclos Prod/Cons");
+                    if (cPC == null) return;
+                    Integer cantEl = validarEnteroPositivo(txtCantElementos.getText(), "Cantidad Elementos");
+                    if (cantEl == null) return;
+
+                    nuevoProceso.setIdBuffer(idBuf);
+                    nuevoProceso.setCiclosProdCons(cPC);
+                    nuevoProceso.setCantidadElementos(cantEl);
+                    break;
+            }
 
             colaProcesos.encolar(nuevoProceso);
 

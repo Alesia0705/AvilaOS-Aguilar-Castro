@@ -1,4 +1,5 @@
 package modelo;
+
 import modelo.enums.EstadoProceso;
 import modelo.enums.TipoProceso;
 import modelo.enums.MotivoBloqueo;
@@ -33,6 +34,13 @@ public class Proceso {
     private long cicloFinalizacion = -1;
     private int ciclosBloqueado;
 
+    // --- Campos Dinámicos por Tipo de Proceso (Issue 1) ---
+    private int ciclosCpu;
+    private int ciclosIo;
+    private String idBuffer;
+    private int ciclosProdCons;
+    private int cantidadElementos;
+
     /**
      * Constructor para instanciar un nuevo proceso desde la GUI.
      */
@@ -52,7 +60,7 @@ public class Proceso {
         this.motivoBloqueo = MotivoBloqueo.NINGUNO;
     }
 
-    // Getters y Setters
+    // --- Getters y Setters Base ---
     public int getId() { return id; }
     public String getNombre() { return nombre; }
     public int getMemoriaRAM() { return memoriaRAM; }
@@ -68,6 +76,23 @@ public class Proceso {
     public int getMar() { return mar; }
     public MotivoBloqueo getMotivoBloqueo() { return motivoBloqueo; }
     public void setMotivoBloqueo(MotivoBloqueo motivoBloqueo) { this.motivoBloqueo = motivoBloqueo; }
+
+    // --- Getters y Setters para Campos Dinámicos (Issue 1) ---
+    public int getCiclosCpu() { return ciclosCpu; }
+    public void setCiclosCpu(int ciclosCpu) { this.ciclosCpu = ciclosCpu; }
+
+    public int getCiclosIo() { return ciclosIo; }
+    public void setCiclosIo(int ciclosIo) { this.ciclosIo = ciclosIo; }
+
+    public String getIdBuffer() { return idBuffer; }
+    public void setIdBuffer(String idBuffer) { this.idBuffer = idBuffer; }
+
+    public int getCiclosProdCons() { return ciclosProdCons; }
+    public void setCiclosProdCons(int ciclosProdCons) { this.ciclosProdCons = ciclosProdCons; }
+
+    public int getCantidadElementos() { return cantidadElementos; }
+    public void setCantidadElementos(int cantidadElementos) { this.cantidadElementos = cantidadElementos; }
+
     /**
      * Ejecuta una instrucción: PC y MAR avanzan 1 y baja el tiempo restante.
      */
@@ -77,7 +102,7 @@ public class Proceso {
         tiempoRestante--;
     }
 
-        /**
+    /**
      * Descuenta un ciclo del deadline (si llega a 0, el proceso debe terminarse).
      */
     public void decrementarDeadline() {
