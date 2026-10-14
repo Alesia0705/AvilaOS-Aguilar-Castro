@@ -70,6 +70,32 @@ public class ListaEnlazada<T> {
         return actual.getDato();
     }
     
+        /**
+     * Saca de la lista el elemento indicado, esté donde esté.
+     * Devuelve true si lo encontró y false si no estaba.
+     */
+    public boolean quitar(T dato) {
+        Nodo<T> anterior = null;
+        Nodo<T> actual = cabeza;
+        while (actual != null) {
+            if (actual.getDato() == dato) {
+                if (anterior == null) {
+                    cabeza = actual.getSiguiente();
+                } else {
+                    anterior.setSiguiente(actual.getSiguiente());
+                }
+                if (actual == cola) {
+                    cola = anterior;
+                }
+                tamano--;
+                return true;
+            }
+            anterior = actual;
+            actual = actual.getSiguiente();
+        }
+        return false;
+    }
+    
     public int getTamano() { return tamano; }
 
     public boolean estaVacia() { return tamano == 0; }
