@@ -96,6 +96,15 @@ public class ListaEnlazada<T> {
         return false;
     }
     
+        /**
+     * Deja la lista sin elementos.
+     */
+    public void vaciar() {
+        cabeza = null;
+        cola = null;
+        tamano = 0;
+    }
+    
     public int getTamano() { return tamano; }
 
     public boolean estaVacia() { return tamano == 0; }
