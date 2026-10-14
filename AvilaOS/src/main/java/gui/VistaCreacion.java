@@ -10,14 +10,13 @@ import util.LogEventos;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.List;
 import util.ListaEnlazada;
 
 /**
  * Vista 1: Interfaz gráfica Swing para la configuración inicial de ÁvilaOS.
  * Permite definir parámetros globales, RAM y política por computador (Issue 2),
- * crear buffers e instanciar/encolar procesos reales con campos dinámicos (Issue 1).
+ * crear buffers e instanciar/encolar procesos reales con campos dinámicos
+ * (Issue 1).
  */
 public class VistaCreacion extends JFrame {
 
@@ -33,8 +32,8 @@ public class VistaCreacion extends JFrame {
 
     // Componentes Dinámicos Pestaña 1 (Issue 2: Configuración por Computador)
     private JPanel panelDetalleComputadores;
-    private final List<JTextField> listaTxtRamComps = new ArrayList<>();
-    private final List<JComboBox<String>> listaCbPoliticaComps = new ArrayList<>();
+    private final ListaEnlazada<JTextField> listaTxtRamComps = new ListaEnlazada<>();
+    private final ListaEnlazada<JComboBox<String>> listaCbPoliticaComps = new ListaEnlazada<>();
 
     // Componentes Pestaña 2: Crear Buffer
     private JTextField txtBufferId;
@@ -101,7 +100,9 @@ public class VistaCreacion extends JFrame {
         agregarFila(panelGenerales, gbc, 2, "Latencia de Red (ciclos):", txtLatenciaRed);
 
         // Fila de Número de Computadores con botón de actualización
-        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.gridwidth = 1;
         panelGenerales.add(new JLabel("Número de Computadores:"), gbc);
 
         JPanel panelCompInput = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
@@ -135,15 +136,18 @@ public class VistaCreacion extends JFrame {
     }
 
     /**
-     * Genera dinámicamente las casillas de RAM y Selección de Política para cada Computador (Issue 2).
+     * Genera dinámicamente las casillas de RAM y Selección de Política para
+     * cada Computador (Issue 2).
      */
     private void generarCamposComputadores() {
         Integer numComps = validarRangoEntero(txtNumComputadores.getText(), "Número de Computadores", 1, 10);
-        if (numComps == null) return;
+        if (numComps == null) {
+            return;
+        }
 
         panelDetalleComputadores.removeAll();
-        listaTxtRamComps.clear();
-        listaCbPoliticaComps.clear();
+        listaTxtRamComps.vaciar();
+        listaCbPoliticaComps.vaciar();
 
         String[] politicasDisponibles = new String[]{"Round Robin", "FCFS", "Prioridades", "SRTF"};
 
@@ -166,8 +170,8 @@ public class VistaCreacion extends JFrame {
             panelPC.add(lblPolitica);
             panelPC.add(cbPolitica);
 
-            listaTxtRamComps.add(txtRam);
-            listaCbPoliticaComps.add(cbPolitica);
+            listaTxtRamComps.agregarAlFinal(txtRam);
+            listaCbPoliticaComps.agregarAlFinal(cbPolitica);
 
             panelDetalleComputadores.add(panelPC);
         }
@@ -194,7 +198,9 @@ public class VistaCreacion extends JFrame {
         JButton btnCrearBuffer = new JButton("Crear Buffer");
         btnCrearBuffer.addActionListener(e -> crearBufferAccion());
 
-        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.gridwidth = 2;
         gbc.insets = new Insets(15, 12, 8, 12);
         panel.add(btnCrearBuffer, gbc);
 
@@ -251,7 +257,9 @@ public class VistaCreacion extends JFrame {
         JButton btnCrearProceso = new JButton("Guardar / Crear Proceso");
         btnCrearProceso.addActionListener(e -> crearYEncolarProcesoAccion());
 
-        gbc.gridx = 0; gbc.gridy = 12; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 12;
+        gbc.gridwidth = 2;
         gbc.insets = new Insets(12, 12, 8, 12);
         panelProceso.add(btnCrearProceso, gbc);
 
@@ -263,21 +271,26 @@ public class VistaCreacion extends JFrame {
     }
 
     private void agregarFila(JPanel panel, GridBagConstraints gbc, int fila, String etiqueta, JComponent componente) {
-        gbc.gridx = 0; gbc.gridy = fila; gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        gbc.gridy = fila;
+        gbc.gridwidth = 1;
         panel.add(new JLabel(etiqueta), gbc);
         gbc.gridx = 1;
         panel.add(componente, gbc);
     }
 
     private void agregarFilaComponente(JPanel panel, GridBagConstraints gbc, int fila, JLabel label, JComponent componente) {
-        gbc.gridx = 0; gbc.gridy = fila; gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        gbc.gridy = fila;
+        gbc.gridwidth = 1;
         panel.add(label, gbc);
         gbc.gridx = 1;
         panel.add(componente, gbc);
     }
 
     /**
-     * Muestra u oculta los campos dinámicos según el tipo de proceso seleccionado (Issue 1).
+     * Muestra u oculta los campos dinámicos según el tipo de proceso
+     * seleccionado (Issue 1).
      */
     private void actualizarCamposDinamicos() {
         String tipoSeleccionado = (String) cbTipoProceso.getSelectedItem();
@@ -323,7 +336,6 @@ public class VistaCreacion extends JFrame {
     }
 
     // --- Lógica de Validaciones ---
-
     private boolean esCampoTextoValido(String texto, String nombreCampo) {
         if (texto == null || texto.trim().isEmpty()) {
             JOptionPane.showMessageDialog(this, "El campo '" + nombreCampo + "' no puede estar vacío.", "Campo Requerido", JOptionPane.WARNING_MESSAGE);
@@ -333,7 +345,9 @@ public class VistaCreacion extends JFrame {
     }
 
     private Integer validarEnteroPositivo(String texto, String nombreCampo) {
-        if (!esCampoTextoValido(texto, nombreCampo)) return null;
+        if (!esCampoTextoValido(texto, nombreCampo)) {
+            return null;
+        }
         try {
             int num = Integer.parseInt(texto.trim());
             if (num <= 0) {
@@ -349,7 +363,9 @@ public class VistaCreacion extends JFrame {
 
     private Integer validarRangoEntero(String texto, String nombreCampo, int min, int max) {
         Integer num = validarEnteroPositivo(texto, nombreCampo);
-        if (num == null) return null;
+        if (num == null) {
+            return null;
+        }
         if (num < min || num > max) {
             JOptionPane.showMessageDialog(this, "El campo '" + nombreCampo + "' debe estar comprendido entre " + min + " y " + max + ".", "Rango Inválido", JOptionPane.WARNING_MESSAGE);
             return null;
@@ -360,25 +376,35 @@ public class VistaCreacion extends JFrame {
     // Lógica 1: Guardar Configuración Global en CSV (Issue 2)
     private void guardarConfiguracionCSV() {
         Integer ciclo = validarEnteroPositivo(txtDuracionCiclo.getText(), "Duración de Ciclo");
-        if (ciclo == null) return;
+        if (ciclo == null) {
+            return;
+        }
 
         Integer quantum = validarEnteroPositivo(txtQuantum.getText(), "Quantum");
-        if (quantum == null) return;
+        if (quantum == null) {
+            return;
+        }
 
         Integer latencia = validarEnteroPositivo(txtLatenciaRed.getText(), "Latencia de Red");
-        if (latencia == null) return;
+        if (latencia == null) {
+            return;
+        }
 
         Integer comps = validarRangoEntero(txtNumComputadores.getText(), "Número de Computadores", 1, 10);
-        if (comps == null) return;
+        if (comps == null) {
+            return;
+        }
 
         ListaEnlazada<ConfiguracionComputador> listaPC = new ListaEnlazada<>();
         StringBuilder resumenConfig = new StringBuilder();
 
-        for (int i = 0; i < listaTxtRamComps.size(); i++) {
-            Integer ramPC = validarEnteroPositivo(listaTxtRamComps.get(i).getText(), "RAM PC " + (i + 1));
-            if (ramPC == null) return;
+        for (int i = 0; i < listaTxtRamComps.getTamano(); i++) {
+            Integer ramPC = validarEnteroPositivo(listaTxtRamComps.obtener(i).getText(), "RAM PC " + (i + 1));
+            if (ramPC == null) {
+                return;
+            }
 
-            String politicaPC = (String) listaCbPoliticaComps.get(i).getSelectedItem();
+            String politicaPC = (String) listaCbPoliticaComps.obtener(i).getSelectedItem();
             ConfiguracionComputador pcConfig = new ConfiguracionComputador(i + 1, ramPC, politicaPC);
             listaPC.agregarAlFinal(pcConfig);
 
@@ -389,9 +415,9 @@ public class VistaCreacion extends JFrame {
             GestorArchivo.guardarConfiguracionCompleta("configuracion.csv", ciclo, quantum, latencia, listaPC);
             logEventos.registrar(0L, "Configuración global guardada en configuracion.csv con " + listaPC.getTamano() + " computadores.");
 
-            JOptionPane.showMessageDialog(this, 
-                    "Configuración guardada exitosamente en 'configuracion.csv'\n\n" +
-                    "Resumen de Computadores:\n" + resumenConfig.toString().replace(" | ", "\n"), 
+            JOptionPane.showMessageDialog(this,
+                    "Configuración guardada exitosamente en 'configuracion.csv'\n\n"
+                    + "Resumen de Computadores:\n" + resumenConfig.toString().replace(" | ", "\n"),
                     "Éxito", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error al guardar configuración: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -401,20 +427,26 @@ public class VistaCreacion extends JFrame {
     // Lógica 2: Instanciar Buffer
     private void crearBufferAccion() {
         String idStr = txtBufferId.getText().trim();
-        if (!esCampoTextoValido(idStr, "ID del Buffer")) return;
+        if (!esCampoTextoValido(idStr, "ID del Buffer")) {
+            return;
+        }
 
         Integer cap = validarEnteroPositivo(txtBufferCapacidad.getText(), "Capacidad Acotada");
-        if (cap == null) return;
+        if (cap == null) {
+            return;
+        }
 
         Integer comp = validarEnteroPositivo(txtBufferComputador.getText(), "Computador Anfitrión");
-        if (comp == null) return;
+        if (comp == null) {
+            return;
+        }
 
         try {
             Buffer buffer = new Buffer(idStr, cap, comp);
             logEventos.registrar(0L, "Buffer " + idStr + " (Capacidad: " + cap + ") creado en PC " + comp);
 
-            JOptionPane.showMessageDialog(this, 
-                    "Buffer " + idStr + " instanciado exitosamente.", 
+            JOptionPane.showMessageDialog(this,
+                    "Buffer " + idStr + " instanciado exitosamente.",
                     "Buffer Creado", JOptionPane.INFORMATION_MESSAGE);
         } catch (Exception ex) {
             JOptionPane.showMessageDialog(this, "Error al crear buffer: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
@@ -424,22 +456,34 @@ public class VistaCreacion extends JFrame {
     // Lógica 3: Instanciar Proceso, Asignar Datos Dinámicos y Encolar en ColaProcesos
     private void crearYEncolarProcesoAccion() {
         String nombre = txtNombreProceso.getText().trim();
-        if (!esCampoTextoValido(nombre, "Nombre del Proceso")) return;
+        if (!esCampoTextoValido(nombre, "Nombre del Proceso")) {
+            return;
+        }
 
         Integer instrucciones = validarEnteroPositivo(txtInstruccionesProceso.getText(), "Cantidad de Instrucciones");
-        if (instrucciones == null) return;
+        if (instrucciones == null) {
+            return;
+        }
 
         Integer ram = validarEnteroPositivo(txtRamProceso.getText(), "Memoria RAM");
-        if (ram == null) return;
+        if (ram == null) {
+            return;
+        }
 
         Integer prioridad = validarRangoEntero(txtPrioridadProceso.getText(), "Prioridad", 1, 5);
-        if (prioridad == null) return;
+        if (prioridad == null) {
+            return;
+        }
 
         Integer deadline = validarEnteroPositivo(txtDeadlineProceso.getText(), "Deadline");
-        if (deadline == null) return;
+        if (deadline == null) {
+            return;
+        }
 
         Integer computador = validarEnteroPositivo(txtCompProceso.getText(), "Computador Asignado");
-        if (computador == null) return;
+        if (computador == null) {
+            return;
+        }
 
         String tipoTexto = cbTipoProceso.getSelectedItem().toString();
         TipoProceso tipo = convertirTipo(tipoTexto);
@@ -451,22 +495,32 @@ public class VistaCreacion extends JFrame {
             switch (tipoTexto) {
                 case "CPU Bound":
                     Integer cCpu = validarEnteroPositivo(txtCiclosCpu.getText(), "Ciclos CPU");
-                    if (cCpu == null) return;
+                    if (cCpu == null) {
+                        return;
+                    }
                     nuevoProceso.setCiclosCpu(cCpu);
                     break;
                 case "IO Bound":
                     Integer cIo = validarEnteroPositivo(txtCiclosIo.getText(), "Ciclos I/O");
-                    if (cIo == null) return;
+                    if (cIo == null) {
+                        return;
+                    }
                     nuevoProceso.setCiclosIo(cIo);
                     break;
                 case "Productor":
                 case "Consumidor":
                     String idBuf = txtBufferProceso.getText().trim();
-                    if (!esCampoTextoValido(idBuf, "ID del Buffer")) return;
+                    if (!esCampoTextoValido(idBuf, "ID del Buffer")) {
+                        return;
+                    }
                     Integer cPC = validarEnteroPositivo(txtCiclosProdCons.getText(), "Ciclos Prod/Cons");
-                    if (cPC == null) return;
+                    if (cPC == null) {
+                        return;
+                    }
                     Integer cantEl = validarEnteroPositivo(txtCantElementos.getText(), "Cantidad Elementos");
-                    if (cantEl == null) return;
+                    if (cantEl == null) {
+                        return;
+                    }
 
                     nuevoProceso.setIdBuffer(idBuf);
                     nuevoProceso.setCiclosProdCons(cPC);
@@ -479,13 +533,13 @@ public class VistaCreacion extends JFrame {
             logEventos.registrar(0L, "Proceso encolado: " + nuevoProceso + " | Procesos en cola: " + colaProcesos.getTamano());
 
             JOptionPane.showMessageDialog(this,
-                    "¡Proceso encolado con éxito!\n\n" +
-                            "ID: " + nuevoProceso.getId() + "\n" +
-                            "Nombre: " + nuevoProceso.getNombre() + "\n" +
-                            "Instrucciones: " + nuevoProceso.getInstruccionesTotales() + "\n" +
-                            "RAM: " + nuevoProceso.getMemoriaRAM() + " MB\n" +
-                            "Tipo: " + nuevoProceso.getTipo() + "\n" +
-                            "Total de procesos en cola: " + colaProcesos.getTamano(),
+                    "¡Proceso encolado con éxito!\n\n"
+                    + "ID: " + nuevoProceso.getId() + "\n"
+                    + "Nombre: " + nuevoProceso.getNombre() + "\n"
+                    + "Instrucciones: " + nuevoProceso.getInstruccionesTotales() + "\n"
+                    + "RAM: " + nuevoProceso.getMemoriaRAM() + " MB\n"
+                    + "Tipo: " + nuevoProceso.getTipo() + "\n"
+                    + "Total de procesos en cola: " + colaProcesos.getTamano(),
                     "Proceso Registrado", JOptionPane.INFORMATION_MESSAGE);
 
             txtNombreProceso.setText("Proceso_" + (nuevoProceso.getId() + 1));
@@ -500,11 +554,16 @@ public class VistaCreacion extends JFrame {
      */
     private TipoProceso convertirTipo(String texto) {
         switch (texto) {
-            case "CPU Bound": return TipoProceso.CPU_BOUND;
-            case "IO Bound": return TipoProceso.IO_BOUND;
-            case "Productor": return TipoProceso.PRODUCTOR;
-            case "Consumidor": return TipoProceso.CONSUMIDOR;
-            default: throw new IllegalArgumentException("Tipo de proceso desconocido: " + texto);
+            case "CPU Bound":
+                return TipoProceso.CPU_BOUND;
+            case "IO Bound":
+                return TipoProceso.IO_BOUND;
+            case "Productor":
+                return TipoProceso.PRODUCTOR;
+            case "Consumidor":
+                return TipoProceso.CONSUMIDOR;
+            default:
+                throw new IllegalArgumentException("Tipo de proceso desconocido: " + texto);
         }
     }
 
