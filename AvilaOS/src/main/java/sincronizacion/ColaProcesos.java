@@ -19,4 +19,80 @@ public class ColaProcesos {
         this.lista = new ListaEnlazada<>();
         this.mutex = new Semaphore(1);
     }
+
+    /**
+     * Agrega un proceso al final de la cola.
+     */
+    public void encolar(Proceso proceso) {
+        try {
+            mutex.acquire();
+            try {
+                lista.agregarAlFinal(proceso);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Saca y devuelve el primer proceso de la cola, o null si está vacía.
+     */
+    public Proceso desencolar() {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.quitarPrimero();
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
+    }
+        /**
+     * Devuelve el primer proceso sin sacarlo de la cola, o null si está vacía.
+     */
+    public Proceso obtenerPrimero() {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.obtener(0);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
+    }
+
+    /**
+     * Devuelve cuántos procesos hay en la cola.
+     */
+    public int getTamano() {
+        int tamano = 0;
+        try {
+            mutex.acquire();
+            try {
+                tamano = lista.getTamano();
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return tamano;
+    }
+
+    /**
+     * Indica si la cola no tiene procesos.
+     */
+    public boolean estaVacia() {
+        return getTamano() == 0;
+    }
 }
