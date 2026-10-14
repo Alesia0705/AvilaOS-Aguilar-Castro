@@ -1,60 +1,22 @@
 package sincronizacion;
 
+import java.util.concurrent.Semaphore;
 import modelo.Proceso;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import util.ListaEnlazada;
 
 /**
- * Representa la cola de procesos en espera o listos para ejecución en ÁvilaOS.
- * Implementa concurrencia segura para permitir operaciones sincronizadas.
+ * Cola de procesos compartida entre hilos. Guarda los procesos en una
+ * ListaEnlazada propia y la protege con un Semaphore(1) usado como mutex.
+ *
+ * @author Alesia Castro
  */
 public class ColaProcesos {
 
-    private final Queue<Proceso> cola = new LinkedList<>();
+    private final ListaEnlazada<Proceso> lista;
+    private final Semaphore mutex;
 
-    /**
-     * Agrega un proceso a la cola.
-     */
-    public synchronized void encolar(Proceso proceso) {
-        if (proceso != null) {
-            cola.add(proceso);
-        }
-    }
-
-    /**
-     * Desencola y retorna el primer proceso en la cola.
-     */
-    public synchronized Proceso desencolar() {
-        return cola.poll();
-    }
-
-    /**
-     * Consulta el primer proceso de la cola sin removerlo.
-     */
-    public synchronized Proceso obtenerPrimero() {
-        return cola.peek();
-    }
-
-    /**
-     * Retorna la cantidad total de procesos actualmente en cola.
-     */
-    public synchronized int getTamano() {
-        return cola.size();
-    }
-
-    /**
-     * Verifica si la cola no contiene procesos.
-     */
-    public synchronized boolean estaVacia() {
-        return cola.isEmpty();
-    }
-
-    /**
-     * Retorna una copia de la lista de procesos para iteración, exportación o renderizado GUI.
-     */
-    public synchronized List<Proceso> obtenerListaProcesos() {
-        return new ArrayList<>(cola);
+    public ColaProcesos() {
+        this.lista = new ListaEnlazada<>();
+        this.mutex = new Semaphore(1);
     }
 }
