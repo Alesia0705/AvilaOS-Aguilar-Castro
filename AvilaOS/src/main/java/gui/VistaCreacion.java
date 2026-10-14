@@ -12,6 +12,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
+import util.ListaEnlazada;
 
 /**
  * Vista 1: Interfaz gráfica Swing para la configuración inicial de ÁvilaOS.
@@ -370,7 +371,7 @@ public class VistaCreacion extends JFrame {
         Integer comps = validarRangoEntero(txtNumComputadores.getText(), "Número de Computadores", 1, 10);
         if (comps == null) return;
 
-        List<ConfiguracionComputador> listaPC = new ArrayList<>();
+        ListaEnlazada<ConfiguracionComputador> listaPC = new ListaEnlazada<>();
         StringBuilder resumenConfig = new StringBuilder();
 
         for (int i = 0; i < listaTxtRamComps.size(); i++) {
@@ -379,14 +380,14 @@ public class VistaCreacion extends JFrame {
 
             String politicaPC = (String) listaCbPoliticaComps.get(i).getSelectedItem();
             ConfiguracionComputador pcConfig = new ConfiguracionComputador(i + 1, ramPC, politicaPC);
-            listaPC.add(pcConfig);
+            listaPC.agregarAlFinal(pcConfig);
 
             resumenConfig.append("PC ").append(i + 1).append(" [RAM: ").append(ramPC).append("MB, Política: ").append(politicaPC).append("] | ");
         }
 
         try {
             GestorArchivo.guardarConfiguracionCompleta("configuracion.csv", ciclo, quantum, latencia, listaPC);
-            logEventos.registrar(0L, "Configuración global guardada en configuracion.csv con " + listaPC.size() + " computadores.");
+            logEventos.registrar(0L, "Configuración global guardada en configuracion.csv con " + listaPC.getTamano() + " computadores.");
 
             JOptionPane.showMessageDialog(this, 
                     "Configuración guardada exitosamente en 'configuracion.csv'\n\n" +
