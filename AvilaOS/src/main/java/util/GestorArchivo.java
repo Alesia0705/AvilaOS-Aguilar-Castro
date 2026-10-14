@@ -6,12 +6,10 @@ import modelo.enums.TipoProceso;
 import sincronizacion.ColaProcesos;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * Utilidad encargada de la lectura y escritura en disco de archivos CSV
- * para la configuración del sistema y la lista de procesos.
+ * Utilidad encargada de la lectura y escritura en disco de archivos CSV para la
+ * configuración del sistema y la lista de procesos.
  */
 public class GestorArchivo {
 
@@ -19,14 +17,15 @@ public class GestorArchivo {
 
     // --- 1. GUARDAR CONFIGURACIÓN COMPLETA EN CSV ---
     /**
-     * Guarda la configuración global y el detalle de cada computador en configuracion.csv.
+     * Guarda la configuración global y el detalle de cada computador en
+     * configuracion.csv.
      */
     public static void guardarConfiguracionCompleta(
             String rutaArchivo,
             int duracionCiclo,
             int quantum,
             int latenciaRed,
-            List<ConfiguracionComputador> listaComputadores) throws IOException {
+            ListaEnlazada<ConfiguracionComputador> listaComputadores) throws IOException {
 
         try (BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(rutaArchivo), ENCODING))) {
             // Sección Global
@@ -34,7 +33,7 @@ public class GestorArchivo {
             bw.newLine();
             bw.write("DuracionCiclo,Quantum,LatenciaRed,NumComputadores");
             bw.newLine();
-            bw.write(duracionCiclo + "," + quantum + "," + latenciaRed + "," + listaComputadores.size());
+            bw.write(duracionCiclo + "," + quantum + "," + latenciaRed + "," + listaComputadores.getTamano());
             bw.newLine();
             bw.newLine();
 
@@ -44,7 +43,8 @@ public class GestorArchivo {
             bw.write("ID_PC,RAM_MB,PoliticaInicial");
             bw.newLine();
 
-            for (ConfiguracionComputador pc : listaComputadores) {
+            for (int i = 0; i < listaComputadores.getTamano(); i++) {
+                ConfiguracionComputador pc = listaComputadores.obtener(i);
                 bw.write(pc.getIdPC() + "," + pc.getMemoriaRAM() + "," + pc.getPoliticaPlanificacion());
                 bw.newLine();
             }
@@ -53,7 +53,8 @@ public class GestorArchivo {
 
     // --- 2. CARGAR CONFIGURACIÓN DESDE CSV ---
     /**
-     * Lee configuracion.csv y retorna un objeto contenedor con los datos globales y la lista de PCs.
+     * Lee configuracion.csv y retorna un objeto contenedor con los datos
+     * globales y la lista de PCs.
      */
     public static DatosConfiguracion cargarConfiguracion(String rutaArchivo) throws IOException {
         File file = new File(rutaArchivo);
@@ -64,7 +65,7 @@ public class GestorArchivo {
         int duracionCiclo = 1000;
         int quantum = 3;
         int latenciaRed = 2;
-        List<ConfiguracionComputador> listaComps = new ArrayList<>();
+        ListaEnlazada<ConfiguracionComputador> listaComps = new ListaEnlazada<>();
 
         try (BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(file), ENCODING))) {
             String linea;
@@ -100,7 +101,7 @@ public class GestorArchivo {
                     int idPC = Integer.parseInt(tokens[0].trim());
                     int ram = Integer.parseInt(tokens[1].trim());
                     String politica = tokens[2].trim();
-                    listaComps.add(new ConfiguracionComputador(idPC, ram, politica));
+                    listaComps.agregarAlFinal(new ConfiguracionComputador(idPC, ram, politica));
                 }
             }
         }
@@ -118,22 +119,22 @@ public class GestorArchivo {
             bw.newLine();
 
             // Obtenemos copia o iteración de procesos
-            List<Proceso> listaProcesos = cola.obtenerListaProcesos();
+            Proceso[] listaProcesos = cola.obtenerListaProcesos();
             for (Proceso p : listaProcesos) {
                 StringBuilder sb = new StringBuilder();
                 sb.append(p.getId()).append(",")
-                  .append(p.getNombre()).append(",")
-                  .append(p.getInstruccionesTotales()).append(",")
-                  .append(p.getMemoriaRAM()).append(",")
-                  .append(p.getPrioridad()).append(",")
-                  .append(p.getDeadline()).append(",")
-                  .append(p.getTipo().name()).append(",")
-                  .append(p.getComputadorAsignado()).append(",")
-                  .append(p.getCiclosCpu()).append(",")
-                  .append(p.getCiclosIo()).append(",")
-                  .append(p.getIdBuffer() != null ? p.getIdBuffer() : "").append(",")
-                  .append(p.getCiclosProdCons()).append(",")
-                  .append(p.getCantidadElementos());
+                        .append(p.getNombre()).append(",")
+                        .append(p.getInstruccionesTotales()).append(",")
+                        .append(p.getMemoriaRAM()).append(",")
+                        .append(p.getPrioridad()).append(",")
+                        .append(p.getDeadline()).append(",")
+                        .append(p.getTipo().name()).append(",")
+                        .append(p.getComputadorAsignado()).append(",")
+                        .append(p.getCiclosCpu()).append(",")
+                        .append(p.getCiclosIo()).append(",")
+                        .append(p.getIdBuffer() != null ? p.getIdBuffer() : "").append(",")
+                        .append(p.getCiclosProdCons()).append(",")
+                        .append(p.getCantidadElementos());
 
                 bw.write(sb.toString());
                 bw.newLine();
@@ -143,21 +144,33 @@ public class GestorArchivo {
 
     // --- CLASE CONTENEDORA INTERNA ---
     public static class DatosConfiguracion {
+
         private final int duracionCiclo;
         private final int quantum;
         private final int latenciaRed;
-        private final List<ConfiguracionComputador> listaComputadores;
+        private final ListaEnlazada<ConfiguracionComputador> listaComputadores;
 
-        public DatosConfiguracion(int duracionCiclo, int quantum, int latenciaRed, List<ConfiguracionComputador> listaComputadores) {
+        public DatosConfiguracion(int duracionCiclo, int quantum, int latenciaRed, ListaEnlazada<ConfiguracionComputador> listaComputadores) {
             this.duracionCiclo = duracionCiclo;
             this.quantum = quantum;
             this.latenciaRed = latenciaRed;
             this.listaComputadores = listaComputadores;
         }
 
-        public int getDuracionCiclo() { return duracionCiclo; }
-        public int getQuantum() { return quantum; }
-        public int getLatenciaRed() { return latenciaRed; }
-        public List<ConfiguracionComputador> getListaComputadores() { return listaComputadores; }
+        public int getDuracionCiclo() {
+            return duracionCiclo;
+        }
+
+        public int getQuantum() {
+            return quantum;
+        }
+
+        public int getLatenciaRed() {
+            return latenciaRed;
+        }
+
+        public ListaEnlazada<ConfiguracionComputador> getListaComputadores() {
+            return listaComputadores;
+        }
     }
 }

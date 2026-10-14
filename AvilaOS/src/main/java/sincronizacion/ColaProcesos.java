@@ -1,60 +1,159 @@
 package sincronizacion;
 
+import java.util.concurrent.Semaphore;
 import modelo.Proceso;
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Queue;
+import util.ListaEnlazada;
 
 /**
- * Representa la cola de procesos en espera o listos para ejecución en ÁvilaOS.
- * Implementa concurrencia segura para permitir operaciones sincronizadas.
+ * Cola de procesos compartida entre hilos. Guarda los procesos en una
+ * ListaEnlazada propia y la protege con un Semaphore(1) usado como mutex.
+ *
+ * @author Alesia Castro
  */
 public class ColaProcesos {
 
-    private final Queue<Proceso> cola = new LinkedList<>();
+    private final ListaEnlazada<Proceso> lista;
+    private final Semaphore mutex;
+
+    public ColaProcesos() {
+        this.lista = new ListaEnlazada<>();
+        this.mutex = new Semaphore(1);
+    }
 
     /**
-     * Agrega un proceso a la cola.
+     * Agrega un proceso al final de la cola.
      */
-    public synchronized void encolar(Proceso proceso) {
-        if (proceso != null) {
-            cola.add(proceso);
+    public void encolar(Proceso proceso) {
+        try {
+            mutex.acquire();
+            try {
+                lista.agregarAlFinal(proceso);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
     /**
-     * Desencola y retorna el primer proceso en la cola.
+     * Saca y devuelve el primer proceso de la cola, o null si está vacía.
      */
-    public synchronized Proceso desencolar() {
-        return cola.poll();
+    public Proceso desencolar() {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.quitarPrimero();
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
     }
 
     /**
-     * Consulta el primer proceso de la cola sin removerlo.
+     * Devuelve el primer proceso sin sacarlo de la cola, o null si está vacía.
      */
-    public synchronized Proceso obtenerPrimero() {
-        return cola.peek();
+    public Proceso obtenerPrimero() {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.obtener(0);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
     }
 
     /**
-     * Retorna la cantidad total de procesos actualmente en cola.
+     * Devuelve el proceso de la posición indicada sin sacarlo de la cola. La
+     * posición 0 es el primero. Devuelve null si la posición no es válida.
      */
-    public synchronized int getTamano() {
-        return cola.size();
+    public Proceso obtener(int indice) {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.obtener(indice);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
     }
 
     /**
-     * Verifica si la cola no contiene procesos.
+     * Saca de la cola el proceso indicado, esté en la posición que esté.
+     * Devuelve true si lo encontró y false si no estaba.
      */
-    public synchronized boolean estaVacia() {
-        return cola.isEmpty();
+    public boolean quitar(Proceso proceso) {
+        boolean quitado = false;
+        try {
+            mutex.acquire();
+            try {
+                quitado = lista.quitar(proceso);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return quitado;
     }
 
     /**
-     * Retorna una copia de la lista de procesos para iteración, exportación o renderizado GUI.
+     * Devuelve cuántos procesos hay en la cola.
      */
-    public synchronized List<Proceso> obtenerListaProcesos() {
-        return new ArrayList<>(cola);
+    public int getTamano() {
+        int tamano = 0;
+        try {
+            mutex.acquire();
+            try {
+                tamano = lista.getTamano();
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return tamano;
+    }
+
+    /**
+     * Indica si la cola no tiene procesos.
+     */
+    public boolean estaVacia() {
+        return getTamano() == 0;
+    }
+
+    /**
+     * Devuelve una copia de los procesos de la cola, en orden, como arreglo. Es
+     * una foto del momento: si la cola cambia después, el arreglo no cambia.
+     */
+    public Proceso[] obtenerListaProcesos() {
+        Proceso[] copia = new Proceso[0];
+        try {
+            mutex.acquire();
+            try {
+                copia = new Proceso[lista.getTamano()];
+                for (int i = 0; i < copia.length; i++) {
+                    copia[i] = lista.obtener(i);
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return copia;
     }
 }
