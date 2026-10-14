@@ -118,7 +118,7 @@ public class GestorArchivo {
             bw.newLine();
 
             // Obtenemos copia o iteración de procesos
-            List<Proceso> listaProcesos = cola.obtenerListaProcesos();
+            Proceso[] listaProcesos = cola.obtenerListaProcesos();
             for (Proceso p : listaProcesos) {
                 StringBuilder sb = new StringBuilder();
                 sb.append(p.getId()).append(",")
