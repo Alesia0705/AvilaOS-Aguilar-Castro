@@ -53,7 +53,8 @@ public class ColaProcesos {
         }
         return resultado;
     }
-        /**
+
+    /**
      * Devuelve el primer proceso sin sacarlo de la cola, o null si está vacía.
      */
     public Proceso obtenerPrimero() {
@@ -69,6 +70,44 @@ public class ColaProcesos {
             Thread.currentThread().interrupt();
         }
         return resultado;
+    }
+
+    /**
+     * Devuelve el proceso de la posición indicada sin sacarlo de la cola. La
+     * posición 0 es el primero. Devuelve null si la posición no es válida.
+     */
+    public Proceso obtener(int indice) {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.obtener(indice);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
+    }
+
+    /**
+     * Saca de la cola el proceso indicado, esté en la posición que esté.
+     * Devuelve true si lo encontró y false si no estaba.
+     */
+    public boolean quitar(Proceso proceso) {
+        boolean quitado = false;
+        try {
+            mutex.acquire();
+            try {
+                quitado = lista.quitar(proceso);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return quitado;
     }
 
     /**
@@ -95,9 +134,10 @@ public class ColaProcesos {
     public boolean estaVacia() {
         return getTamano() == 0;
     }
-        /**
-     * Devuelve una copia de los procesos de la cola, en orden, como arreglo.
-     * Es una foto del momento: si la cola cambia después, el arreglo no cambia.
+
+    /**
+     * Devuelve una copia de los procesos de la cola, en orden, como arreglo. Es
+     * una foto del momento: si la cola cambia después, el arreglo no cambia.
      */
     public Proceso[] obtenerListaProcesos() {
         Proceso[] copia = new Proceso[0];
