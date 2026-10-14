@@ -95,4 +95,25 @@ public class ColaProcesos {
     public boolean estaVacia() {
         return getTamano() == 0;
     }
+        /**
+     * Devuelve una copia de los procesos de la cola, en orden, como arreglo.
+     * Es una foto del momento: si la cola cambia después, el arreglo no cambia.
+     */
+    public Proceso[] obtenerListaProcesos() {
+        Proceso[] copia = new Proceso[0];
+        try {
+            mutex.acquire();
+            try {
+                copia = new Proceso[lista.getTamano()];
+                for (int i = 0; i < copia.length; i++) {
+                    copia[i] = lista.obtener(i);
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return copia;
+    }
 }
