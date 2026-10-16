@@ -7,16 +7,16 @@ import sincronizacion.Buffer;
 import sincronizacion.ColaProcesos;
 import util.GestorArchivo;
 import util.LogEventos;
+import util.ListaEnlazada;
 
 import javax.swing.*;
 import java.awt.*;
-import util.ListaEnlazada;
 
 /**
  * Vista 1: Interfaz gráfica Swing para la configuración inicial de ÁvilaOS.
  * Permite definir parámetros globales, RAM y política por computador (Issue 2),
- * crear buffers e instanciar/encolar procesos reales con campos dinámicos
- * (Issue 1).
+ * crear buffers e instanciar/encolar procesos reales con campos dinámicos (Issue 1).
+ * Incluye la transición directa hacia la Vista 2 (Simulación) pasando la lista de CPUs.
  */
 public class VistaCreacion extends JFrame {
 
@@ -68,8 +68,9 @@ public class VistaCreacion extends JFrame {
     public VistaCreacion() {
         super("ÁvilaOS - Vista 1: Configuración del Sistema");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(650, 680);
+        setSize(670, 720);
         setLocationRelativeTo(null);
+        setLayout(new BorderLayout());
 
         JTabbedPane tabbedPane = new JTabbedPane();
 
@@ -77,7 +78,55 @@ public class VistaCreacion extends JFrame {
         tabbedPane.addTab("Crear Buffer", crearPanelBuffer());
         tabbedPane.addTab("Crear Proceso", crearPanelProceso());
 
-        add(tabbedPane);
+        // Barra Inferior para ir a la Vista 2
+        JPanel panelInferiorSimulacion = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 10));
+        JButton btnIrSimulacion = new JButton("🚀 Iniciar Simulación (Vista 2)");
+        btnIrSimulacion.setFont(btnIrSimulacion.getFont().deriveFont(Font.BOLD, 13f));
+        btnIrSimulacion.setBackground(new Color(0, 102, 204));
+        btnIrSimulacion.setForeground(Color.WHITE);
+        btnIrSimulacion.addActionListener(e -> abrirVistaSimulacionAccion());
+
+        panelInferiorSimulacion.add(btnIrSimulacion);
+
+        add(tabbedPane, BorderLayout.CENTER);
+        add(panelInferiorSimulacion, BorderLayout.SOUTH);
+    }
+
+    // --- Transición a la Vista 2 ---
+    private void abrirVistaSimulacionAccion() {
+        if (colaProcesos.getTamano() == 0) {
+            int opcion = JOptionPane.showConfirmDialog(this,
+                    "No has registrado ningún proceso en la cola aún.\n¿Deseas pasar a la Vista de Simulación de todas formas?",
+                    "Cola de Procesos Vacía", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+            if (opcion != JOptionPane.YES_OPTION) {
+                return;
+            }
+        }
+
+        // Recopilar la lista de computadores configurados en la Pestaña 1
+        ListaEnlazada<ConfiguracionComputador> listaPC = new ListaEnlazada<>();
+        for (int i = 0; i < listaTxtRamComps.getTamano(); i++) {
+            try {
+                int ramPC = Integer.parseInt(listaTxtRamComps.obtener(i).getText().trim());
+                String politicaPC = (String) listaCbPoliticaComps.obtener(i).getSelectedItem();
+                listaPC.agregarAlFinal(new ConfiguracionComputador(i + 1, ramPC, politicaPC));
+            } catch (NumberFormatException e) {
+                // RAM con formato por defecto en caso de error
+                String politicaPC = (String) listaCbPoliticaComps.obtener(i).getSelectedItem();
+                listaPC.agregarAlFinal(new ConfiguracionComputador(i + 1, 1024, politicaPC));
+            }
+        }
+
+        // Instanciar cola de bloqueados y lista de terminados iniciales
+        ColaProcesos colaBloqueados = new ColaProcesos();
+        ListaEnlazada<Proceso> listaTerminados = new ListaEnlazada<>();
+
+        // Crear la Vista 2 enviando colas y computadores
+        VistaSimulacion vistaSimulacion = new VistaSimulacion(this.colaProcesos, colaBloqueados, listaTerminados, listaPC);
+        vistaSimulacion.setVisible(true);
+
+        // Cerrar la Vista 1
+        this.dispose();
     }
 
     // --- Panel 1: Configuración Global (Issue 2) ---
