@@ -121,4 +121,80 @@ public class Cpu {
             Thread.currentThread().interrupt();
         }
     }
+        public int getIdComputador() {
+        return idComputador;
+    }
+
+    public ModoCpu getModo() {
+        ModoCpu valor = ModoCpu.OCIOSO;
+        try {
+            mutex.acquire();
+            try {
+                valor = modo;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Proceso que está en la CPU, o null si está libre.
+     */
+    public Proceso getProcesoActual() {
+        Proceso valor = null;
+        try {
+            mutex.acquire();
+            try {
+                valor = procesoActual;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Contador de programa del proceso en ejecución (0 si la CPU está libre).
+     */
+    public int getPc() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                if (procesoActual != null) {
+                    valor = procesoActual.getPc();
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Registro de dirección de memoria del proceso en ejecución (0 si está libre).
+     */
+    public int getMar() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                if (procesoActual != null) {
+                    valor = procesoActual.getMar();
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
 }
