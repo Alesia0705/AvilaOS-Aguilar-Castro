@@ -84,4 +84,32 @@ public class Memoria {
             Thread.currentThread().interrupt();
         }
     }
+        public int getCapacidadTotal() {
+        return capacidadTotal;
+    }
+
+    /**
+     * Memoria ocupada en este momento.
+     */
+    public int getUsada() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                valor = usada;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Memoria libre en este momento.
+     */
+    public int getLibre() {
+        return capacidadTotal - getUsada();
+    }
 }
