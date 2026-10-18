@@ -42,4 +42,25 @@ public class Memoria {
         }
         return cabe;
     }
+        /**
+     * Intenta ocupar la cantidad de memoria pedida. Devuelve true si había
+     * espacio y la reservó, y false si no cabía (no cambia nada).
+     */
+    public boolean reservar(int cantidad) {
+        boolean reservado = false;
+        try {
+            mutex.acquire();
+            try {
+                if (cantidad > 0 && (capacidadTotal - usada) >= cantidad) {
+                    usada = usada + cantidad;
+                    reservado = true;
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return reservado;
+    }
 }
