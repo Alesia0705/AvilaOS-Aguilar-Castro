@@ -59,6 +59,30 @@ public class RelojGlobal implements Runnable {
         hilo.setDaemon(true);
         hilo.start();
     }
+        /**
+     * Da un ciclo completo: avanza el contador, avisa a todos los
+     * participantes que empiecen y espera a que todos terminen.
+     */
+    private void darCiclo() {
+        try {
+            int cantidad = 0;
+            mutex.acquire();
+            try {
+                ciclo++;
+                cantidad = participantes.getTamano();
+                for (int i = 0; i < cantidad; i++) {
+                    participantes.obtener(i).inicioCiclo.release();
+                }
+            } finally {
+                mutex.release();
+            }
+            for (int i = 0; i < cantidad; i++) {
+                finCiclo.acquire();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
     /**
      * Hilo asociado a un escucha. Espera su turno al comienzo de cada ciclo,
      * ejecuta el onTick del escucha y avisa al reloj que terminó.
