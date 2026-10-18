@@ -63,4 +63,25 @@ public class Memoria {
         }
         return reservado;
     }
+        /**
+     * Devuelve memoria al terminar un proceso. Nunca deja la memoria
+     * usada por debajo de 0, aunque se libere de más.
+     */
+    public void liberar(int cantidad) {
+        try {
+            mutex.acquire();
+            try {
+                if (cantidad > 0) {
+                    usada = usada - cantidad;
+                    if (usada < 0) {
+                        usada = 0;
+                    }
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }
