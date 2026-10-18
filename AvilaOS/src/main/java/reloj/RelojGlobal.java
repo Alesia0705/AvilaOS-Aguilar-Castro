@@ -20,6 +20,7 @@ public class RelojGlobal implements Runnable {
     private volatile long ciclo;
     private volatile int duracionCicloMs;
     private volatile boolean encendido;
+    private Thread hiloReloj;
 
     private final Semaphore finCiclo;
     private final Semaphore mutex;
@@ -66,6 +67,29 @@ public class RelojGlobal implements Runnable {
         Thread hilo = new Thread(participante);
         hilo.setDaemon(true);
         hilo.start();
+    }
+
+    /**
+     * Enciende el reloj en su propio hilo. Si ya estaba encendido, no hace
+     * nada.
+     */
+    public void arrancar() {
+        if (!encendido) {
+            encendido = true;
+            hiloReloj = new Thread(this);
+            hiloReloj.setDaemon(true);
+            hiloReloj.start();
+        }
+    }
+
+    /**
+     * Apaga el reloj.
+     */
+    public void detener() {
+        encendido = false;
+        if (hiloReloj != null) {
+            hiloReloj.interrupt();
+        }
     }
 
     /**
