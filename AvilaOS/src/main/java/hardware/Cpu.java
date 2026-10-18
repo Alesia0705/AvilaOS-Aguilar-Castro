@@ -79,4 +79,29 @@ public class Cpu {
         }
         return retirado;
     }
+        /**
+     * Avanza un ciclo de reloj. En modo usuario ejecuta una instrucción del
+     * proceso actual; en modo sistema operativo o sin proceso, el ciclo se
+     * cuenta como de sistema o como ocioso. No decide nada: si el proceso
+     * termina, el kernel se da cuenta y lo retira.
+     */
+    public void ejecutarCiclo() {
+        try {
+            mutex.acquire();
+            try {
+                if (modo == ModoCpu.SISTEMA_OPERATIVO) {
+                    ciclosSistema++;
+                } else if (procesoActual != null && procesoActual.getTiempoRestante() > 0) {
+                    procesoActual.ejecutarInstruccion();
+                    ciclosUsuario++;
+                } else {
+                    ciclosOcioso++;
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }
