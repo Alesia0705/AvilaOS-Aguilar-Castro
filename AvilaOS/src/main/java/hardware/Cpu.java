@@ -59,4 +59,24 @@ public class Cpu {
         }
         return asignado;
     }
+        /**
+     * Saca de la CPU el proceso que tenía y lo devuelve (null si estaba
+     * libre). La CPU queda ociosa.
+     */
+    public Proceso retirar() {
+        Proceso retirado = null;
+        try {
+            mutex.acquire();
+            try {
+                retirado = procesoActual;
+                procesoActual = null;
+                modo = ModoCpu.OCIOSO;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return retirado;
+    }
 }
