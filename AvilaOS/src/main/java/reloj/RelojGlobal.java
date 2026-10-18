@@ -36,9 +36,17 @@ public class RelojGlobal implements Runnable {
 
     @Override
     public void run() {
-        // el bucle del reloj se escribe en un paso posterior
+        try {
+            while (encendido) {
+                darCiclo();
+                Thread.sleep(duracionCicloMs);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
-        /**
+
+    /**
      * Registra un escucha (por ejemplo, un computador). Se le crea un hilo
      * propio que queda esperando el primer ciclo.
      */
@@ -59,9 +67,10 @@ public class RelojGlobal implements Runnable {
         hilo.setDaemon(true);
         hilo.start();
     }
-        /**
-     * Da un ciclo completo: avanza el contador, avisa a todos los
-     * participantes que empiecen y espera a que todos terminen.
+
+    /**
+     * Da un ciclo completo: avanza el contador, avisa a todos los participantes
+     * que empiecen y espera a que todos terminen.
      */
     private void darCiclo() {
         try {
@@ -83,6 +92,7 @@ public class RelojGlobal implements Runnable {
             Thread.currentThread().interrupt();
         }
     }
+
     /**
      * Hilo asociado a un escucha. Espera su turno al comienzo de cada ciclo,
      * ejecuta el onTick del escucha y avisa al reloj que terminó.
