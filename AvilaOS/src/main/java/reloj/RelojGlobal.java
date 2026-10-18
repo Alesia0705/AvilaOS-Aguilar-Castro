@@ -38,7 +38,27 @@ public class RelojGlobal implements Runnable {
     public void run() {
         // el bucle del reloj se escribe en un paso posterior
     }
-
+        /**
+     * Registra un escucha (por ejemplo, un computador). Se le crea un hilo
+     * propio que queda esperando el primer ciclo.
+     */
+    public void registrar(EscuchaReloj escucha) {
+        Participante participante = new Participante(escucha);
+        try {
+            mutex.acquire();
+            try {
+                participantes.agregarAlFinal(participante);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return;
+        }
+        Thread hilo = new Thread(participante);
+        hilo.setDaemon(true);
+        hilo.start();
+    }
     /**
      * Hilo asociado a un escucha. Espera su turno al comienzo de cada ciclo,
      * ejecuta el onTick del escucha y avisa al reloj que terminó.
