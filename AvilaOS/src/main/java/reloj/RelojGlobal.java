@@ -1,7 +1,3 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package reloj;
 
 import java.util.concurrent.Semaphore;
@@ -130,7 +126,36 @@ public class RelojGlobal implements Runnable {
             pasoManual.release();
         }
     }
+    
+        /**
+     * Cambia la duración de un ciclo en milisegundos, incluso con el reloj
+     * en marcha. Valores menores o iguales a 0 se ignoran.
+     */
+    public void setDuracionCicloMs(int nuevaDuracion) {
+        if (nuevaDuracion > 0) {
+            this.duracionCicloMs = nuevaDuracion;
+        }
+    }
 
+    public int getDuracionCicloMs() {
+        return duracionCicloMs;
+    }
+
+    /**
+     * Número del último ciclo dado (0 si el reloj aún no ha empezado).
+     */
+    public long getCiclo() {
+        return ciclo;
+    }
+
+    public boolean estaEncendido() {
+        return encendido;
+    }
+
+    public boolean estaPausado() {
+        return pausado;
+    }
+    
     /**
      * Da un ciclo completo: avanza el contador, avisa a todos los participantes
      * que empiecen y espera a que todos terminen.
