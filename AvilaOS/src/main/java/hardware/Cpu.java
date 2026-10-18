@@ -197,4 +197,55 @@ public class Cpu {
         }
         return valor;
     }
+        public int getCiclosUsuario() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                valor = ciclosUsuario;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    public int getCiclosSistema() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                valor = ciclosSistema;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    public int getCiclosOcioso() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                valor = ciclosOcioso;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Ciclos totales transcurridos desde que arrancó la CPU.
+     */
+    public int getCiclosTotales() {
+        return getCiclosUsuario() + getCiclosSistema() + getCiclosOcioso();
+    }
 }
