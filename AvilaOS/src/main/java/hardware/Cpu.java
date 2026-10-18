@@ -104,4 +104,21 @@ public class Cpu {
             Thread.currentThread().interrupt();
         }
     }
+        /**
+     * Cambia el modo de la CPU. Lo usa el kernel: SISTEMA_OPERATIVO mientras
+     * hace su trabajo (planificar, cambiar de proceso) y USUARIO al volver
+     * a correr un proceso.
+     */
+    public void setModo(ModoCpu nuevoModo) {
+        try {
+            mutex.acquire();
+            try {
+                modo = nuevoModo;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
 }
