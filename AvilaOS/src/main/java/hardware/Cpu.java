@@ -37,4 +37,26 @@ public class Cpu {
         this.ciclosOcioso = 0;
         this.mutex = new Semaphore(1);
     }
+        /**
+     * Pone un proceso en la CPU y la deja en modo usuario. Si la CPU ya
+     * tiene un proceso, no hace nada y devuelve false.
+     */
+    public boolean asignar(Proceso proceso) {
+        boolean asignado = false;
+        try {
+            mutex.acquire();
+            try {
+                if (procesoActual == null && proceso != null) {
+                    procesoActual = proceso;
+                    modo = ModoCpu.USUARIO;
+                    asignado = true;
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return asignado;
+    }
 }
