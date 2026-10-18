@@ -20,18 +20,22 @@ public class RelojGlobal implements Runnable {
     private volatile long ciclo;
     private volatile int duracionCicloMs;
     private volatile boolean encendido;
+    private volatile boolean pausado;
     private Thread hiloReloj;
 
     private final Semaphore finCiclo;
     private final Semaphore mutex;
+    private final Semaphore pasoManual;
     private final ListaEnlazada<Participante> participantes;
 
     public RelojGlobal(int duracionCicloMs) {
         this.ciclo = 0;
         this.duracionCicloMs = duracionCicloMs;
         this.encendido = false;
+        this.pausado = false;
         this.finCiclo = new Semaphore(0);
         this.mutex = new Semaphore(1);
+        this.pasoManual = new Semaphore(0);
         this.participantes = new ListaEnlazada<>();
     }
 
@@ -39,8 +43,16 @@ public class RelojGlobal implements Runnable {
     public void run() {
         try {
             while (encendido) {
-                darCiclo();
-                Thread.sleep(duracionCicloMs);
+                if (pausado) {
+                    pasoManual.acquire();
+                    if (!encendido) {
+                        break;
+                    }
+                    darCiclo();
+                } else {
+                    darCiclo();
+                    Thread.sleep(duracionCicloMs);
+                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -89,6 +101,33 @@ public class RelojGlobal implements Runnable {
         encendido = false;
         if (hiloReloj != null) {
             hiloReloj.interrupt();
+        }
+    }
+
+    /**
+     * Pausa el reloj: deja de avanzar solo y espera órdenes de paso a paso.
+     */
+    public void pausar() {
+        pausado = true;
+    }
+
+    /**
+     * Reanuda el modo automático después de una pausa.
+     */
+    public void reanudar() {
+        if (pausado) {
+            pausado = false;
+            pasoManual.release();
+        }
+    }
+
+    /**
+     * Con el reloj pausado, da exactamente un ciclo. Si no está pausado, no
+     * hace nada.
+     */
+    public void avanzarUnCiclo() {
+        if (pausado) {
+            pasoManual.release();
         }
     }
 
