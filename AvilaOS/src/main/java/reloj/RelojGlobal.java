@@ -84,6 +84,7 @@ public class RelojGlobal implements Runnable {
     public void arrancar() {
         if (!encendido) {
             encendido = true;
+            pasoManual.drainPermits();
             hiloReloj = new Thread(this);
             hiloReloj.setDaemon(true);
             hiloReloj.start();
@@ -126,10 +127,10 @@ public class RelojGlobal implements Runnable {
             pasoManual.release();
         }
     }
-    
-        /**
-     * Cambia la duración de un ciclo en milisegundos, incluso con el reloj
-     * en marcha. Valores menores o iguales a 0 se ignoran.
+
+    /**
+     * Cambia la duración de un ciclo en milisegundos, incluso con el reloj en
+     * marcha. Valores menores o iguales a 0 se ignoran.
      */
     public void setDuracionCicloMs(int nuevaDuracion) {
         if (nuevaDuracion > 0) {
@@ -155,7 +156,7 @@ public class RelojGlobal implements Runnable {
     public boolean estaPausado() {
         return pausado;
     }
-    
+
     /**
      * Da un ciclo completo: avanza el contador, avisa a todos los participantes
      * que empiecen y espera a que todos terminen.
@@ -174,7 +175,7 @@ public class RelojGlobal implements Runnable {
                 mutex.release();
             }
             for (int i = 0; i < cantidad; i++) {
-                finCiclo.acquire();
+                finCiclo.acquireUninterruptibly();
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -195,13 +196,15 @@ public class RelojGlobal implements Runnable {
             this.inicioCiclo = new Semaphore(0);
         }
 
-        @Override
+                @Override
         public void run() {
             try {
                 while (true) {
                     inicioCiclo.acquire();
                     try {
                         escucha.onTick(ciclo);
+                    } catch (RuntimeException e) {
+                        System.err.println("Error en un escucha del reloj (ciclo " + ciclo + "): " + e);
                     } finally {
                         finCiclo.release();
                     }
