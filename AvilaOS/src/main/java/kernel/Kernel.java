@@ -4,26 +4,38 @@ import hardware.Memoria;
 import modelo.Proceso;
 import modelo.enums.EstadoProceso;
 import sincronizacion.ColaProcesos;
+import hardware.Cpu;
+import planificacion.PoliticaPlanificacion;
 
 /**
- * Kernel de un computador: decide qué proceso está en cada estado.
- * Mantiene las colas de nuevos, listos, bloqueados y terminados, y admite
- * procesos a memoria. El hardware (Memoria, Cpu) solo obedece; las decisiones
- * se toman aquí.
+ * Kernel de un computador: decide qué proceso está en cada estado. Mantiene las
+ * colas de nuevos, listos, bloqueados y terminados, y admite procesos a
+ * memoria. El hardware (Memoria, Cpu) solo obedece; las decisiones se toman
+ * aquí.
  */
 public class Kernel {
 
     private final Memoria memoria;
+    private final Cpu cpu;
     private final ColaProcesos nuevos;
     private final ColaProcesos listos;
     private final ColaProcesos bloqueados;
     private final ColaProcesos terminados;
 
-    public Kernel(Memoria memoria) {
-        if (memoria == null) {
-            throw new IllegalArgumentException("El kernel necesita una memoria");
+    // volatile: la interfaz puede cambiar la política mientras el kernel la usa
+    private volatile PoliticaPlanificacion politica;
+
+    // Ciclos seguidos que lleva el proceso actual en la CPU (para el quantum)
+    private int ciclosEnCpu;
+
+    public Kernel(Memoria memoria, Cpu cpu, PoliticaPlanificacion politica) {
+        if (memoria == null || cpu == null || politica == null) {
+            throw new IllegalArgumentException("El kernel necesita memoria, CPU y política");
         }
         this.memoria = memoria;
+        this.cpu = cpu;
+        this.politica = politica;
+        this.ciclosEnCpu = 0;
         this.nuevos = new ColaProcesos();
         this.listos = new ColaProcesos();
         this.bloqueados = new ColaProcesos();
@@ -45,12 +57,12 @@ public class Kernel {
     }
 
     /**
-     * Intenta admitir a memoria los procesos nuevos, por orden de llegada.
-     * - Si su RAM cabe, se reserva y pasa a listos.
-     * - Si no cabe ahora, se queda esperando en nuevos.
-     * - Si su RAM es inválida (<= 0) o mayor que toda la memoria del computador,
-     *   nunca podrá entrar: se manda a terminados para no atascar la simulación.
-     * Solo se llama desde el hilo del kernel; la interfaz solo agrega a nuevos.
+     * Intenta admitir a memoria los procesos nuevos, por orden de llegada. - Si
+     * su RAM cabe, se reserva y pasa a listos. - Si no cabe ahora, se queda
+     * esperando en nuevos. - Si su RAM es inválida (<= 0) o mayor que toda la
+     * memoria del computador, nunca podrá entrar: se manda a terminados para no
+     * atascar la simulación. Solo se llama desde el hilo del kernel; la
+     * interfaz solo agrega a nuevos.
      */
     public void admitirNuevos() {
         Proceso[] pendientes = nuevos.obtenerListaProcesos();
@@ -70,7 +82,6 @@ public class Kernel {
     }
 
     // --- Consultas para la interfaz (copias: la vista solo observa) ---
-
     public Proceso[] obtenerNuevos() {
         return nuevos.obtenerListaProcesos();
     }
@@ -89,5 +100,25 @@ public class Kernel {
 
     public Memoria getMemoria() {
         return memoria;
+    }
+
+    /**
+     * Cambia la política de planificación en caliente. Aplica desde el
+     * siguiente ciclo. Devuelve false si la política es null.
+     */
+    public boolean cambiarPolitica(PoliticaPlanificacion nueva) {
+        if (nueva == null) {
+            return false;
+        }
+        this.politica = nueva;
+        return true;
+    }
+
+    public PoliticaPlanificacion getPolitica() {
+        return politica;
+    }
+
+    public Cpu getCpu() {
+        return cpu;
     }
 }
