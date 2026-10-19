@@ -149,7 +149,7 @@ public class VistaCreacion extends JFrame {
         listaTxtRamComps.vaciar();
         listaCbPoliticaComps.vaciar();
 
-        String[] politicasDisponibles = new String[]{"Round Robin", "FCFS", "Prioridades", "SRTF"};
+        String[] politicasDisponibles = new String[]{"Round Robin", "FCFS", "Prioridades", "EDF"};
 
         for (int i = 1; i <= numComps; i++) {
             JPanel panelPC = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 5));
