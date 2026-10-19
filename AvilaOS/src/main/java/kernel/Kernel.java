@@ -80,7 +80,75 @@ public class Kernel {
             }
         }
     }
+    
+        /**
+     * Fase de decisiones del kernel en un ciclo. Se llama ANTES de que la CPU
+     * ejecute ese ciclo. (En el siguiente commit se completa con la
+     * expropiación y la asignación de CPU.)
+     */
+    public void planificar(long ciclo) {
+        admitirNuevos();
+        descontarDeadlines(ciclo);
+        revisarProcesoEnCpu(ciclo);
+    }
 
+    /**
+     * Resta un ciclo al deadline de todos los procesos vivos. Los que están en
+     * listos o bloqueados y llegan a 0 se terminan; el de la CPU se revisa
+     * después, en revisarProcesoEnCpu.
+     */
+    private void descontarDeadlines(long ciclo) {
+        Proceso[] enListos = listos.obtenerListaProcesos();
+        for (int i = 0; i < enListos.length; i++) {
+            enListos[i].decrementarDeadline();
+            if (enListos[i].getDeadline() == 0) {
+                listos.quitar(enListos[i]);
+                finalizarProceso(enListos[i], ciclo);
+            }
+        }
+
+        Proceso[] enBloqueados = bloqueados.obtenerListaProcesos();
+        for (int i = 0; i < enBloqueados.length; i++) {
+            enBloqueados[i].decrementarDeadline();
+            if (enBloqueados[i].getDeadline() == 0) {
+                bloqueados.quitar(enBloqueados[i]);
+                finalizarProceso(enBloqueados[i], ciclo);
+            }
+        }
+
+        Proceso enCpu = cpu.getProcesoActual();
+        if (enCpu != null) {
+            enCpu.decrementarDeadline();
+        }
+    }
+
+    /**
+     * Si el proceso que está en la CPU ya ejecutó todas sus instrucciones o se
+     * le venció el deadline, se saca de la CPU y se termina.
+     */
+    private void revisarProcesoEnCpu(long ciclo) {
+        Proceso enCpu = cpu.getProcesoActual();
+        if (enCpu == null) {
+            return;
+        }
+        if (enCpu.getTiempoRestante() <= 0 || enCpu.getDeadline() == 0) {
+            cpu.retirar();
+            ciclosEnCpu = 0;
+            finalizarProceso(enCpu, ciclo);
+        }
+    }
+
+    /**
+     * Pasa un proceso a terminados: libera su RAM, registra el ciclo en que el
+     * kernel lo detectó terminado y lo guarda. Si termina con tiempoRestante > 0,
+     * significa que perdió su deadline (útil para las métricas).
+     */
+    private void finalizarProceso(Proceso proceso, long ciclo) {
+        memoria.liberar(proceso.getMemoriaRAM());
+        proceso.setEstado(EstadoProceso.TERMINADO);
+        proceso.setCicloFinalizacion(ciclo);
+        terminados.encolar(proceso);
+    }
     // --- Consultas para la interfaz (copias: la vista solo observa) ---
     public Proceso[] obtenerNuevos() {
         return nuevos.obtenerListaProcesos();
