@@ -80,16 +80,26 @@ public class Kernel {
             }
         }
     }
-    
-        /**
+
+    /**
      * Fase de decisiones del kernel en un ciclo. Se llama ANTES de que la CPU
-     * ejecute ese ciclo. (En el siguiente commit se completa con la
-     * expropiación y la asignación de CPU.)
+     * ejecute ese ciclo.
      */
     public void planificar(long ciclo) {
+        // Se lee una sola vez: si la interfaz cambia la política a mitad de ciclo,
+        // este ciclo termina con la política con la que empezó.
+        PoliticaPlanificacion actual = politica;
+
         admitirNuevos();
         descontarDeadlines(ciclo);
         revisarProcesoEnCpu(ciclo);
+        expropiarSiCorresponde(actual);
+        asignarCpuSiLibre(actual, ciclo);
+
+        // Si hay un proceso en la CPU, este ciclo lo va a ejecutar
+        if (cpu.getProcesoActual() != null) {
+            ciclosEnCpu++;
+        }
     }
 
     /**
@@ -140,8 +150,8 @@ public class Kernel {
 
     /**
      * Pasa un proceso a terminados: libera su RAM, registra el ciclo en que el
-     * kernel lo detectó terminado y lo guarda. Si termina con tiempoRestante > 0,
-     * significa que perdió su deadline (útil para las métricas).
+     * kernel lo detectó terminado y lo guarda. Si termina con tiempoRestante >
+     * 0, significa que perdió su deadline (útil para las métricas).
      */
     private void finalizarProceso(Proceso proceso, long ciclo) {
         memoria.liberar(proceso.getMemoriaRAM());
@@ -149,6 +159,44 @@ public class Kernel {
         proceso.setCicloFinalizacion(ciclo);
         terminados.encolar(proceso);
     }
+
+    /**
+     * Si la política lo pide (quantum agotado, llegó uno más prioritario o más
+     * urgente), el proceso sale de la CPU y vuelve al final de listos.
+     */
+    private void expropiarSiCorresponde(PoliticaPlanificacion actual) {
+        Proceso enCpu = cpu.getProcesoActual();
+        if (enCpu != null && actual.debeExpropiar(enCpu, listos, ciclosEnCpu)) {
+            cpu.retirar();
+            enCpu.setEstado(EstadoProceso.LISTO);
+            listos.encolar(enCpu);
+            ciclosEnCpu = 0;
+        }
+    }
+
+    /**
+     * Si la CPU está libre, la política elige el siguiente proceso de listos y
+     * el kernel se lo asigna.
+     */
+    private void asignarCpuSiLibre(PoliticaPlanificacion actual, long ciclo) {
+        if (cpu.getProcesoActual() != null) {
+            return;
+        }
+        Proceso siguiente = actual.seleccionarSiguiente(listos);
+        if (siguiente == null) {
+            return;
+        }
+        if (cpu.asignar(siguiente)) {
+            siguiente.setEstado(EstadoProceso.EJECUCION);
+            ciclosEnCpu = 0;
+            if (siguiente.getCicloPrimeraEjecucion() < 0) {
+                siguiente.setCicloPrimeraEjecucion(ciclo);
+            }
+        } else {
+            listos.encolar(siguiente);
+        }
+    }
+
     // --- Consultas para la interfaz (copias: la vista solo observa) ---
     public Proceso[] obtenerNuevos() {
         return nuevos.obtenerListaProcesos();
