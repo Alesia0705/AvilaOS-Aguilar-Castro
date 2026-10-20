@@ -1,5 +1,7 @@
 package sincronizacion;
 
+import java.util.concurrent.Semaphore;
+
 /**
  * Representa un Buffer Acotado ubicado en la RAM de un computador anfitrión.
  * Sincronizado mediante el algoritmo clásico de Productor-Consumidor con 3 semáforos.
@@ -13,10 +15,13 @@ public class Buffer {
     private int out;
     private int cantidadElementos;
 
-    // Semáforos para el problema del Productor-Consumidor
+    // Semáforos para el problema del Productor-Consumidor (Simulación del OS)
     private Semaforo mutex;  // Controla la exclusión mutua (inicial = 1)
     private Semaforo llenos; // Cuenta elementos producidos disponibles (inicial = 0)
     private Semaforo vacios; // Cuenta espacios disponibles en el buffer (inicial = capacidad)
+
+    // Semáforo REAL de Java para proteger las estructuras compartidas internamente
+    private Semaphore mutexInterno;
 
     /**
      * Inicializa un nuevo buffer acotado en la memoria de un computador específico.
@@ -25,6 +30,11 @@ public class Buffer {
      * @param idComputadorAnfitrion ID del computador donde reside el buffer en RAM.
      */
     public Buffer(String id, int capacidad, int idComputadorAnfitrion) {
+        // Validación de capacidad solicitada por Alesia
+        if (capacidad <= 0) {
+            throw new IllegalArgumentException("La capacidad del buffer debe ser mayor a 0");
+        }
+
         this.id = id;
         this.capacidad = capacidad;
         this.idComputadorAnfitrion = idComputadorAnfitrion;
@@ -37,6 +47,9 @@ public class Buffer {
         this.mutex = new Semaforo("mutex_" + id, 1);
         this.llenos = new Semaforo("llenos_" + id, 0);
         this.vacios = new Semaforo("vacios_" + id, capacidad);
+
+        // Mutex interno de Java inicializado en 1
+        this.mutexInterno = new Semaphore(1);
     }
 
     /**
@@ -44,9 +57,16 @@ public class Buffer {
      * @param elemento Objeto producido a almacenar.
      */
     public void insertar(Object elemento) {
-        arregloElementos[in] = elemento;
-        in = (in + 1) % capacidad;
-        cantidadElementos++;
+        try {
+            mutexInterno.acquire();
+            arregloElementos[in] = elemento;
+            in = (in + 1) % capacidad;
+            cantidadElementos++;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            mutexInterno.release();
+        }
     }
 
     /**
@@ -54,10 +74,18 @@ public class Buffer {
      * @return El objeto consumido.
      */
     public Object extraer() {
-        Object elemento = arregloElementos[out];
-        arregloElementos[out] = null;
-        out = (out + 1) % capacidad;
-        cantidadElementos--;
+        Object elemento = null;
+        try {
+            mutexInterno.acquire();
+            elemento = arregloElementos[out];
+            arregloElementos[out] = null;
+            out = (out + 1) % capacidad;
+            cantidadElementos--;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            mutexInterno.release();
+        }
         return elemento;
     }
 
