@@ -1,22 +1,19 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package hardware;
 
 import java.util.concurrent.Semaphore;
 import modelo.Proceso;
 import modelo.enums.ModoCpu;
+import reloj.EscuchaReloj;
 
 /**
  * Procesador de un computador. Ejecuta una instrucción por ciclo del proceso
- * que el kernel le asigna y cuenta los ciclos que pasa en cada modo
- * (usuario, sistema operativo, ocioso) para calcular su utilización.
- * No decide qué proceso corre: eso es trabajo del kernel.
+ * que el kernel le asigna y cuenta los ciclos que pasa en cada modo (usuario,
+ * sistema operativo, ocioso) para calcular su utilización. No decide qué
+ * proceso corre: eso es trabajo del kernel.
  *
  * @author Alesia Castro
  */
-public class Cpu {
+public class Cpu implements EscuchaReloj {
 
     private final int idComputador;
     private Proceso procesoActual;
@@ -37,9 +34,10 @@ public class Cpu {
         this.ciclosOcioso = 0;
         this.mutex = new Semaphore(1);
     }
-        /**
-     * Pone un proceso en la CPU y la deja en modo usuario. Si la CPU ya
-     * tiene un proceso, no hace nada y devuelve false.
+
+    /**
+     * Pone un proceso en la CPU y la deja en modo usuario. Si la CPU ya tiene
+     * un proceso, no hace nada y devuelve false.
      */
     public boolean asignar(Proceso proceso) {
         boolean asignado = false;
@@ -59,9 +57,10 @@ public class Cpu {
         }
         return asignado;
     }
-        /**
-     * Saca de la CPU el proceso que tenía y lo devuelve (null si estaba
-     * libre). La CPU queda ociosa.
+
+    /**
+     * Saca de la CPU el proceso que tenía y lo devuelve (null si estaba libre).
+     * La CPU queda ociosa.
      */
     public Proceso retirar() {
         Proceso retirado = null;
@@ -79,7 +78,8 @@ public class Cpu {
         }
         return retirado;
     }
-        /**
+
+    /**
      * Avanza un ciclo de reloj. En modo usuario ejecuta una instrucción del
      * proceso actual; en modo sistema operativo o sin proceso, el ciclo se
      * cuenta como de sistema o como ocioso. No decide nada: si el proceso
@@ -100,14 +100,23 @@ public class Cpu {
             } finally {
                 mutex.release();
             }
-        } catch (InterruptedException e) {
+                } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }
-        /**
+
+    /**
+     * El reloj global avisa en cada ciclo: la CPU ejecuta un ciclo.
+     */
+    @Override
+    public void onTick(long ciclo) {
+        ejecutarCiclo();
+    }
+
+    /**
      * Cambia el modo de la CPU. Lo usa el kernel: SISTEMA_OPERATIVO mientras
-     * hace su trabajo (planificar, cambiar de proceso) y USUARIO al volver
-     * a correr un proceso.
+     * hace su trabajo (planificar, cambiar de proceso) y USUARIO al volver a
+     * correr un proceso.
      */
     public void setModo(ModoCpu nuevoModo) {
         try {
@@ -121,7 +130,8 @@ public class Cpu {
             Thread.currentThread().interrupt();
         }
     }
-        public int getIdComputador() {
+
+    public int getIdComputador() {
         return idComputador;
     }
 
@@ -179,7 +189,8 @@ public class Cpu {
     }
 
     /**
-     * Registro de dirección de memoria del proceso en ejecución (0 si está libre).
+     * Registro de dirección de memoria del proceso en ejecución (0 si está
+     * libre).
      */
     public int getMar() {
         int valor = 0;
@@ -197,7 +208,8 @@ public class Cpu {
         }
         return valor;
     }
-        public int getCiclosUsuario() {
+
+    public int getCiclosUsuario() {
         int valor = 0;
         try {
             mutex.acquire();
