@@ -34,6 +34,10 @@ public class Proceso {
     private long cicloFinalizacion = -1;
     private int ciclosBloqueado;
 
+    // --- Esperas con duración fija (E/S, latencia de red) ---
+    private int ciclosEsperaRestantes;
+    private int ciclosCpuEnRafaga;
+
     // --- Campos Dinámicos por Tipo de Proceso (Issue 1) ---
     private int ciclosCpu;
     private int ciclosIo;
@@ -61,37 +65,106 @@ public class Proceso {
     }
 
     // --- Getters y Setters Base ---
-    public int getId() { return id; }
-    public String getNombre() { return nombre; }
-    public int getMemoriaRAM() { return memoriaRAM; }
-    public int getPrioridad() { return prioridad; }
-    public int getDeadline() { return deadline; }
-    public TipoProceso getTipo() { return tipo; }
-    public int getComputadorAsignado() { return computadorAsignado; }
-    public EstadoProceso getEstado() { return estado; }
-    public void setEstado(EstadoProceso estado) { this.estado = estado; }
-    public int getInstruccionesTotales() { return instruccionesTotales; }
-    public int getTiempoRestante() { return tiempoRestante; }
-    public int getPc() { return pc; }
-    public int getMar() { return mar; }
-    public MotivoBloqueo getMotivoBloqueo() { return motivoBloqueo; }
-    public void setMotivoBloqueo(MotivoBloqueo motivoBloqueo) { this.motivoBloqueo = motivoBloqueo; }
+    public int getId() {
+        return id;
+    }
+
+    public String getNombre() {
+        return nombre;
+    }
+
+    public int getMemoriaRAM() {
+        return memoriaRAM;
+    }
+
+    public int getPrioridad() {
+        return prioridad;
+    }
+
+    public int getDeadline() {
+        return deadline;
+    }
+
+    public TipoProceso getTipo() {
+        return tipo;
+    }
+
+    public int getComputadorAsignado() {
+        return computadorAsignado;
+    }
+
+    public EstadoProceso getEstado() {
+        return estado;
+    }
+
+    public void setEstado(EstadoProceso estado) {
+        this.estado = estado;
+    }
+
+    public int getInstruccionesTotales() {
+        return instruccionesTotales;
+    }
+
+    public int getTiempoRestante() {
+        return tiempoRestante;
+    }
+
+    public int getPc() {
+        return pc;
+    }
+
+    public int getMar() {
+        return mar;
+    }
+
+    public MotivoBloqueo getMotivoBloqueo() {
+        return motivoBloqueo;
+    }
+
+    public void setMotivoBloqueo(MotivoBloqueo motivoBloqueo) {
+        this.motivoBloqueo = motivoBloqueo;
+    }
 
     // --- Getters y Setters para Campos Dinámicos (Issue 1) ---
-    public int getCiclosCpu() { return ciclosCpu; }
-    public void setCiclosCpu(int ciclosCpu) { this.ciclosCpu = ciclosCpu; }
+    public int getCiclosCpu() {
+        return ciclosCpu;
+    }
 
-    public int getCiclosIo() { return ciclosIo; }
-    public void setCiclosIo(int ciclosIo) { this.ciclosIo = ciclosIo; }
+    public void setCiclosCpu(int ciclosCpu) {
+        this.ciclosCpu = ciclosCpu;
+    }
 
-    public String getIdBuffer() { return idBuffer; }
-    public void setIdBuffer(String idBuffer) { this.idBuffer = idBuffer; }
+    public int getCiclosIo() {
+        return ciclosIo;
+    }
 
-    public int getCiclosProdCons() { return ciclosProdCons; }
-    public void setCiclosProdCons(int ciclosProdCons) { this.ciclosProdCons = ciclosProdCons; }
+    public void setCiclosIo(int ciclosIo) {
+        this.ciclosIo = ciclosIo;
+    }
 
-    public int getCantidadElementos() { return cantidadElementos; }
-    public void setCantidadElementos(int cantidadElementos) { this.cantidadElementos = cantidadElementos; }
+    public String getIdBuffer() {
+        return idBuffer;
+    }
+
+    public void setIdBuffer(String idBuffer) {
+        this.idBuffer = idBuffer;
+    }
+
+    public int getCiclosProdCons() {
+        return ciclosProdCons;
+    }
+
+    public void setCiclosProdCons(int ciclosProdCons) {
+        this.ciclosProdCons = ciclosProdCons;
+    }
+
+    public int getCantidadElementos() {
+        return cantidadElementos;
+    }
+
+    public void setCantidadElementos(int cantidadElementos) {
+        this.cantidadElementos = cantidadElementos;
+    }
 
     /**
      * Ejecuta una instrucción: PC y MAR avanzan 1 y baja el tiempo restante.
@@ -103,7 +176,8 @@ public class Proceso {
     }
 
     /**
-     * Descuenta un ciclo del deadline (si llega a 0, el proceso debe terminarse).
+     * Descuenta un ciclo del deadline (si llega a 0, el proceso debe
+     * terminarse).
      */
     public void decrementarDeadline() {
         if (deadline > 0) {
@@ -112,20 +186,69 @@ public class Proceso {
     }
 
     // --- Métricas ---
-    public long getCicloLlegada() { return cicloLlegada; }
-    public long getCicloPrimeraEjecucion() { return cicloPrimeraEjecucion; }
-    public long getCicloFinalizacion() { return cicloFinalizacion; }
-    public int getCiclosBloqueado() { return ciclosBloqueado; }
+    public long getCicloLlegada() {
+        return cicloLlegada;
+    }
 
-    public void setCicloLlegada(long cicloLlegada) { this.cicloLlegada = cicloLlegada; }
-    public void setCicloPrimeraEjecucion(long ciclo) { this.cicloPrimeraEjecucion = ciclo; }
-    public void setCicloFinalizacion(long ciclo) { this.cicloFinalizacion = ciclo; }
+    public long getCicloPrimeraEjecucion() {
+        return cicloPrimeraEjecucion;
+    }
+
+    public long getCicloFinalizacion() {
+        return cicloFinalizacion;
+    }
+
+    public int getCiclosBloqueado() {
+        return ciclosBloqueado;
+    }
+
+    public void setCicloLlegada(long cicloLlegada) {
+        this.cicloLlegada = cicloLlegada;
+    }
+
+    public void setCicloPrimeraEjecucion(long ciclo) {
+        this.cicloPrimeraEjecucion = ciclo;
+    }
+
+    public void setCicloFinalizacion(long ciclo) {
+        this.cicloFinalizacion = ciclo;
+    }
 
     /**
      * Suma un ciclo al tiempo que el proceso lleva bloqueado.
      */
     public void incrementarCiclosBloqueado() {
         ciclosBloqueado++;
+    }
+    // --- Espera con duración fija y ráfagas de CPU ---
+
+    public int getCiclosEsperaRestantes() {
+        return ciclosEsperaRestantes;
+    }
+
+    public void setCiclosEsperaRestantes(int ciclos) {
+        this.ciclosEsperaRestantes = (ciclos > 0) ? ciclos : 0;
+    }
+
+    /**
+     * Descuenta un ciclo de espera (nunca baja de 0).
+     */
+    public void decrementarEspera() {
+        if (ciclosEsperaRestantes > 0) {
+            ciclosEsperaRestantes--;
+        }
+    }
+
+    public int getCiclosCpuEnRafaga() {
+        return ciclosCpuEnRafaga;
+    }
+
+    public void incrementarRafaga() {
+        ciclosCpuEnRafaga++;
+    }
+
+    public void reiniciarRafaga() {
+        ciclosCpuEnRafaga = 0;
     }
 
     @Override
