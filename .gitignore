@@ -23,3 +23,9 @@
 hs_err_pid*
 replay_pid*
 /AvilaOS/target/
+
+# Archivo de configuración generado por la aplicación
+configuracion.csv
+
+# Configuración privada de NetBeans
+nbproject/private/
