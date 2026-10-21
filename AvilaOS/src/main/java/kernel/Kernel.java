@@ -26,6 +26,7 @@ public class Kernel {
 
     // volatile: la interfaz puede cambiar la política mientras el kernel la usa
     private volatile PoliticaPlanificacion politica;
+    private volatile ServicioSistema sistema;
 
     // Ciclos seguidos que lleva el proceso actual en la CPU (para el quantum)
     private int ciclosEnCpu;
@@ -138,16 +139,19 @@ public class Kernel {
     }
 
     /**
-     * Avanza un ciclo a los procesos bloqueados por E/S. Cuando su espera llega
-     * a 0 vuelven a la cola de listos.
+     * Avanza un ciclo a los procesos bloqueados. Todos suman un ciclo de
+     * bloqueo. Los que esperan E/S o latencia de red descuentan su espera y
+     * vuelven a LISTO al llegar a 0; los que esperan un semáforo los despierta
+     * un semSignal (despertarBloqueado).
      */
     private void atenderBloqueados() {
         Proceso[] bloqueadosAhora = bloqueados.obtenerListaProcesos();
         for (Proceso p : bloqueadosAhora) {
-            if (p.getMotivoBloqueo() != MotivoBloqueo.ESPERA_ES) {
-                continue; // los de semáforo/red los despierta otro mecanismo
-            }
             p.incrementarCiclosBloqueado();
+            MotivoBloqueo motivo = p.getMotivoBloqueo();
+            if (motivo != MotivoBloqueo.ESPERA_ES && motivo != MotivoBloqueo.LATENCIA_RED) {
+                continue;
+            }
             p.decrementarEspera();
             if (p.getCiclosEsperaRestantes() == 0) {
                 bloqueados.quitar(p);
@@ -277,6 +281,25 @@ public class Kernel {
         }
         this.politica = nueva;
         return true;
+    }
+
+    /**
+     * Lo conecta el sistema al crear el computador.
+     */
+    public void setServicioSistema(ServicioSistema sistema) {
+        this.sistema = sistema;
+    }
+
+    /**
+     * Pasa a LISTO un proceso bloqueado por un semáforo. Lo llama el kernel de
+     * otro computador (o el propio) cuando un semSignal lo despierta.
+     */
+    public void despertarBloqueado(Proceso proceso) {
+        if (bloqueados.quitar(proceso)) {
+            proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+            proceso.setEstado(EstadoProceso.LISTO);
+            listos.encolar(proceso);
+        }
     }
 
     public PoliticaPlanificacion getPolitica() {
