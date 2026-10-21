@@ -204,6 +204,7 @@ public class Kernel {
     private void finalizarProceso(Proceso proceso, long ciclo) {
         memoria.liberar(proceso.getMemoriaRAM());
         proceso.setEstado(EstadoProceso.TERMINADO);
+        proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
         proceso.setCicloFinalizacion(ciclo);
         terminados.encolar(proceso);
     }
