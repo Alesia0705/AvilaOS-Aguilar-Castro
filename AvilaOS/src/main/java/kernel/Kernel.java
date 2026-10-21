@@ -8,6 +8,9 @@ import hardware.Cpu;
 import planificacion.PoliticaPlanificacion;
 import modelo.enums.MotivoBloqueo;
 import modelo.enums.TipoProceso;
+import modelo.enums.ModoCpu;
+import sincronizacion.Buffer;
+import sincronizacion.Semaforo;
 
 /**
  * Kernel de un computador: decide qué proceso está en cada estado. Mantiene las
@@ -105,6 +108,11 @@ public class Kernel {
         if (enCpu != null) {
             ciclosEnCpu++;
             enCpu.incrementarRafaga();
+            // Los 5 pasos del protocolo cuentan como instrucciones en modo sistema
+            if (enCpu.esProdCons()) {
+                cpu.setModo(enCpu.estaEnProtocolo()
+                        ? ModoCpu.SISTEMA_OPERATIVO : ModoCpu.USUARIO);
+            }
         }
     }
 
@@ -171,6 +179,15 @@ public class Kernel {
         if (enCpu == null) {
             return;
         }
+        // Un productor/consumidor aplica el efecto de la instrucción que acaba
+        // de ejecutar; si eso lo bloquea (o falla), sale de la CPU.
+        if (enCpu.esProdCons() && enCpu.getDeadline() != 0) {
+            if (!avanzarProdCons(enCpu, ciclo)) {
+                cpu.retirar();
+                ciclosEnCpu = 0;
+                return;
+            }
+        }
         if (enCpu.getTiempoRestante() <= 0 || enCpu.getDeadline() == 0) {
             cpu.retirar();
             ciclosEnCpu = 0;
@@ -198,6 +215,99 @@ public class Kernel {
         p.setCiclosEsperaRestantes(p.getCiclosIo());
         p.reiniciarRafaga();
         bloqueados.encolar(p);
+    }
+
+    /**
+     * Aplica el efecto de la instrucción que el productor/consumidor acaba de
+     * ejecutar y deja listo el siguiente paso. Fase 0 = trabajando; 1 a 5 =
+     * pasos del protocolo (semWait, semWait, insertar/extraer, semSignal,
+     * semSignal).
+     *
+     * @return false si el proceso debe salir de la CPU (se bloqueó o falló)
+     */
+    private boolean avanzarProdCons(Proceso p, long ciclo) {
+        ServicioSistema servicio = sistema;
+        Buffer buffer = (servicio == null) ? null : servicio.buscarBuffer(p.getIdBuffer());
+        if (buffer == null) {
+            // buffer inexistente: el proceso no puede trabajar, termina sin completarse
+            finalizarProceso(p, ciclo);
+            return false;
+        }
+
+        boolean productor = p.getTipo() == TipoProceso.PRODUCTOR;
+        Semaforo primero = productor ? buffer.getVacios() : buffer.getLlenos();
+        Semaforo segundo = productor ? buffer.getLlenos() : buffer.getVacios();
+        MotivoBloqueo motivoPrimero = productor
+                ? MotivoBloqueo.SEM_BUFFER_LLENO : MotivoBloqueo.SEM_BUFFER_VACIO;
+
+        switch (p.getFaseProdCons()) {
+            case 0:
+                p.incrementarTrabajo();
+                if (p.getTrabajoRealizado() >= p.getCiclosProdCons()) {
+                    p.reiniciarTrabajo();
+                    p.setFaseProdCons(1);
+                    boolean remoto = buffer.getIdComputadorAnfitrion() != cpu.getIdComputador();
+                    if (remoto && servicio.getLatenciaRed() > 0) {
+                        p.setEstado(EstadoProceso.BLOQUEADO);
+                        p.setMotivoBloqueo(MotivoBloqueo.LATENCIA_RED);
+                        p.setCiclosEsperaRestantes(servicio.getLatenciaRed());
+                        bloqueados.encolar(p);
+                        return false;
+                    }
+                }
+                return true;
+            case 1:
+                p.setFaseProdCons(2);
+                return esperarSemaforo(p, primero, motivoPrimero);
+            case 2:
+                p.setFaseProdCons(3);
+                return esperarSemaforo(p, buffer.getMutex(), MotivoBloqueo.SEM_MUTEX);
+            case 3:
+                if (productor) {
+                    buffer.insertar(p.getNombre());
+                } else {
+                    buffer.extraer();
+                }
+                p.setFaseProdCons(4);
+                return true;
+            case 4:
+                despertarProceso(buffer.getMutex().semSignal());
+                p.setFaseProdCons(5);
+                return true;
+            default:
+                despertarProceso(segundo.semSignal());
+                p.incrementarElementos();
+                p.setFaseProdCons(0);
+                return true;
+        }
+    }
+
+    /**
+     * semWait del proceso. Se marca bloqueado y se anota en la cola de
+     * bloqueados ANTES del semWait, para que un semSignal de otro computador
+     * que lo despierte enseguida lo encuentre. Si el semWait lo deja pasar, se
+     * deshace.
+     *
+     * @return true si el proceso puede seguir en la CPU
+     */
+    private boolean esperarSemaforo(Proceso p, Semaforo semaforo, MotivoBloqueo motivo) {
+        p.setEstado(EstadoProceso.BLOQUEADO);
+        p.setMotivoBloqueo(motivo);
+        bloqueados.encolar(p);
+        if (semaforo.semWait(p)) {
+            bloqueados.quitar(p);
+            p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+            p.setEstado(EstadoProceso.EJECUCION);
+            return true;
+        }
+        return false;
+    }
+
+    private void despertarProceso(Proceso despertado) {
+        ServicioSistema servicio = sistema;
+        if (despertado != null && servicio != null) {
+            servicio.despertar(despertado);
+        }
     }
 
     /**
