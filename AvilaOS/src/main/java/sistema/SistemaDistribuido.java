@@ -4,6 +4,7 @@ import computador.Computador;
 import modelo.Proceso;
 import planificacion.PoliticaPlanificacion;
 import sincronizacion.Buffer;
+import reloj.RelojGlobal;
 
 /**
  * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster y el
@@ -19,16 +20,22 @@ public class SistemaDistribuido {
     private Buffer[] buffers;
     private int cantidadBuffers;
     private volatile int latenciaRed;
+    private final RelojGlobal reloj;
 
     /**
      * @param latenciaRed ciclos extra que cuesta cada acceso a un buffer remoto
      * (>= 0)
+     * @param reloj reloj global en el que se registran los computadores
      */
-    public SistemaDistribuido(int latenciaRed) {
+    public SistemaDistribuido(int latenciaRed, RelojGlobal reloj) {
         if (latenciaRed < 0) {
             throw new IllegalArgumentException("La latencia de red no puede ser negativa");
         }
+        if (reloj == null) {
+            throw new IllegalArgumentException("El sistema necesita un reloj global");
+        }
         this.latenciaRed = latenciaRed;
+        this.reloj = reloj;
         this.computadores = new Computador[4];
         this.cantidadComputadores = 0;
         this.buffers = new Buffer[4];
@@ -46,6 +53,7 @@ public class SistemaDistribuido {
         Computador nuevo = new Computador(cantidadComputadores + 1, capacidadRam, politica);
         computadores[cantidadComputadores] = nuevo;
         cantidadComputadores++;
+        reloj.registrar(nuevo);
         return nuevo;
     }
 
@@ -156,6 +164,10 @@ public class SistemaDistribuido {
 
     public int getLatenciaRed() {
         return latenciaRed;
+    }
+
+    public RelojGlobal getReloj() {
+        return reloj;
     }
 
     public boolean setLatenciaRed(int latenciaRed) {
