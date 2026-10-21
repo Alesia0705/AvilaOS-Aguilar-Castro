@@ -6,6 +6,8 @@ import modelo.enums.EstadoProceso;
 import sincronizacion.ColaProcesos;
 import hardware.Cpu;
 import planificacion.PoliticaPlanificacion;
+import modelo.enums.MotivoBloqueo;
+import modelo.enums.TipoProceso;
 
 /**
  * Kernel de un computador: decide qué proceso está en cada estado. Mantiene las
@@ -92,13 +94,16 @@ public class Kernel {
 
         admitirNuevos();
         descontarDeadlines(ciclo);
+        atenderBloqueados();
         revisarProcesoEnCpu(ciclo);
         expropiarSiCorresponde(actual);
         asignarCpuSiLibre(actual, ciclo);
 
         // Si hay un proceso en la CPU, este ciclo lo va a ejecutar
-        if (cpu.getProcesoActual() != null) {
+        Proceso enCpu = cpu.getProcesoActual();
+        if (enCpu != null) {
             ciclosEnCpu++;
+            enCpu.incrementarRafaga();
         }
     }
 
@@ -133,6 +138,27 @@ public class Kernel {
     }
 
     /**
+     * Avanza un ciclo a los procesos bloqueados por E/S. Cuando su espera llega
+     * a 0 vuelven a la cola de listos.
+     */
+    private void atenderBloqueados() {
+        Proceso[] bloqueadosAhora = bloqueados.obtenerListaProcesos();
+        for (Proceso p : bloqueadosAhora) {
+            if (p.getMotivoBloqueo() != MotivoBloqueo.ESPERA_ES) {
+                continue; // los de semáforo/red los despierta otro mecanismo
+            }
+            p.incrementarCiclosBloqueado();
+            p.decrementarEspera();
+            if (p.getCiclosEsperaRestantes() == 0) {
+                bloqueados.quitar(p);
+                p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+                p.setEstado(EstadoProceso.LISTO);
+                listos.encolar(p);
+            }
+        }
+    }
+
+    /**
      * Si el proceso que está en la CPU ya ejecutó todas sus instrucciones o se
      * le venció el deadline, se saca de la CPU y se termina.
      */
@@ -145,7 +171,29 @@ public class Kernel {
             cpu.retirar();
             ciclosEnCpu = 0;
             finalizarProceso(enCpu, ciclo);
+        } else if (debeBloquearsePorEs(enCpu)) {
+            cpu.retirar();
+            ciclosEnCpu = 0;
+            bloquearPorEs(enCpu);
         }
+    }
+
+    /**
+     * Un proceso I/O bound pide E/S al completar su ráfaga de CPU.
+     */
+    private boolean debeBloquearsePorEs(Proceso p) {
+        return p.getTipo() == TipoProceso.IO_BOUND
+                && p.getCiclosCpu() > 0
+                && p.getCiclosIo() > 0
+                && p.getCiclosCpuEnRafaga() >= p.getCiclosCpu();
+    }
+
+    private void bloquearPorEs(Proceso p) {
+        p.setEstado(EstadoProceso.BLOQUEADO);
+        p.setMotivoBloqueo(MotivoBloqueo.ESPERA_ES);
+        p.setCiclosEsperaRestantes(p.getCiclosIo());
+        p.reiniciarRafaga();
+        bloqueados.encolar(p);
     }
 
     /**
