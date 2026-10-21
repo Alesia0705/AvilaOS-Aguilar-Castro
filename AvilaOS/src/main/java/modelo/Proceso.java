@@ -37,6 +37,14 @@ public class Proceso {
     // --- Esperas con duración fija (E/S, latencia de red) ---
     private int ciclosEsperaRestantes;
     private int ciclosCpuEnRafaga;
+    
+    
+    // --- Productor/consumidor: estado del protocolo ---
+    // 0 = trabajando; 1 a 5 = paso del protocolo que le toca ejecutar
+    private int faseProdCons;
+    // ciclos de trabajo ya hechos para el elemento actual
+    private int trabajoRealizado;
+    private int elementosProcesados;
 
     // --- Campos Dinámicos por Tipo de Proceso (Issue 1) ---
     private int ciclosCpu;
@@ -250,7 +258,49 @@ public class Proceso {
     public void reiniciarRafaga() {
         ciclosCpuEnRafaga = 0;
     }
+    
+        // --- Productor/consumidor ---
+    public boolean esProdCons() {
+        return tipo == TipoProceso.PRODUCTOR || tipo == TipoProceso.CONSUMIDOR;
+    }
 
+    /**
+     * Deja listo a un productor o consumidor: cada elemento cuesta
+     * ciclosProdCons de trabajo más 5 instrucciones del protocolo con semáforos,
+     * así que ese es el total de instrucciones que debe ejecutar.
+     * No hace nada con otros tipos de proceso.
+     */
+    public void prepararProdCons() {
+        if (!esProdCons()) {
+            return;
+        }
+        if (ciclosProdCons < 1) {
+            ciclosProdCons = 1;
+        }
+        this.instruccionesTotales = cantidadElementos * (ciclosProdCons + 5);
+        this.tiempoRestante = this.instruccionesTotales;
+        this.faseProdCons = 0;
+        this.trabajoRealizado = 0;
+        this.elementosProcesados = 0;
+    }
+
+    public int getFaseProdCons() { return faseProdCons; }
+
+    public void setFaseProdCons(int fase) { this.faseProdCons = fase; }
+
+    /** true mientras ejecuta alguno de los 5 pasos del protocolo (modo sistema). */
+    public boolean estaEnProtocolo() { return faseProdCons >= 1; }
+
+    public int getTrabajoRealizado() { return trabajoRealizado; }
+
+    public void incrementarTrabajo() { trabajoRealizado++; }
+
+    public void reiniciarTrabajo() { trabajoRealizado = 0; }
+
+    public int getElementosProcesados() { return elementosProcesados; }
+
+    public void incrementarElementos() { elementosProcesados++; }
+    
     @Override
     public String toString() {
         return "Proceso{" + "ID=" + id + ", Nombre='" + nombre + '\'' + ", RAM=" + memoriaRAM + "MB, Tipo='" + tipo + '\'' + '}';
