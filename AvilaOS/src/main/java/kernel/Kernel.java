@@ -134,8 +134,7 @@ public class Kernel {
         Proceso[] enBloqueados = bloqueados.obtenerListaProcesos();
         for (int i = 0; i < enBloqueados.length; i++) {
             enBloqueados[i].decrementarDeadline();
-            if (enBloqueados[i].getDeadline() == 0) {
-                bloqueados.quitar(enBloqueados[i]);
+            if (enBloqueados[i].getDeadline() == 0 && bloqueados.quitar(enBloqueados[i])) {
                 finalizarProceso(enBloqueados[i], ciclo);
             }
         }
@@ -309,13 +308,61 @@ public class Kernel {
             servicio.despertar(despertado);
         }
     }
+        /**
+     * Devuelve lo que un productor/consumidor tenía tomado en los semáforos
+     * cuando termina antes de tiempo (deadline). Para un proceso que termina
+     * bien (fase 0) no hace nada.
+     */
+    private void liberarRecursosProdCons(Proceso p) {
+        ServicioSistema servicio = sistema;
+        Buffer buffer = (servicio == null) ? null : servicio.buscarBuffer(p.getIdBuffer());
+        if (buffer == null) {
+            return;
+        }
+        boolean productor = p.getTipo() == TipoProceso.PRODUCTOR;
+        Semaforo primero = productor ? buffer.getVacios() : buffer.getLlenos();
+        Semaforo segundo = productor ? buffer.getLlenos() : buffer.getVacios();
+        MotivoBloqueo motivo = p.getMotivoBloqueo();
 
+        if (motivo == MotivoBloqueo.SEM_BUFFER_LLENO || motivo == MotivoBloqueo.SEM_BUFFER_VACIO) {
+            // todavía no había pasado el primer semWait: solo se saca de su cola
+            primero.cancelarEspera(p);
+            return;
+        }
+        if (motivo == MotivoBloqueo.SEM_MUTEX) {
+            // esperaba el mutex, pero ya tenía el permiso del primer semáforo
+            buffer.getMutex().cancelarEspera(p);
+            despertarProceso(primero.semSignal());
+            return;
+        }
+        switch (p.getFaseProdCons()) {
+            case 2:
+                despertarProceso(primero.semSignal());
+                break;
+            case 3:
+                despertarProceso(buffer.getMutex().semSignal());
+                despertarProceso(primero.semSignal());
+                break;
+            case 4:
+                despertarProceso(buffer.getMutex().semSignal());
+                despertarProceso(segundo.semSignal());
+                break;
+            case 5:
+                despertarProceso(segundo.semSignal());
+                break;
+            default:
+                break;
+        }
+    }
     /**
      * Pasa un proceso a terminados: libera su RAM, registra el ciclo en que el
      * kernel lo detectó terminado y lo guarda. Si termina con tiempoRestante >
      * 0, significa que perdió su deadline (útil para las métricas).
      */
     private void finalizarProceso(Proceso proceso, long ciclo) {
+        if (proceso.esProdCons()) {
+            liberarRecursosProdCons(proceso);
+        }
         memoria.liberar(proceso.getMemoriaRAM());
         proceso.setEstado(EstadoProceso.TERMINADO);
         proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
