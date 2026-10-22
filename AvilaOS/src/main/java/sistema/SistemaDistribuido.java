@@ -5,6 +5,7 @@ import modelo.Proceso;
 import planificacion.PoliticaPlanificacion;
 import sincronizacion.Buffer;
 import reloj.RelojGlobal;
+import kernel.ServicioSistema;
 
 /**
  * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster y el
@@ -13,7 +14,7 @@ import reloj.RelojGlobal;
  *
  * @author Alesia Castro
  */
-public class SistemaDistribuido {
+public class SistemaDistribuido implements ServicioSistema {
 
     private Computador[] computadores;
     private int cantidadComputadores;
@@ -52,6 +53,7 @@ public class SistemaDistribuido {
         }
         Computador nuevo = new Computador(cantidadComputadores + 1, capacidadRam, politica);
         computadores[cantidadComputadores] = nuevo;
+        nuevo.getKernel().setServicioSistema(this);
         cantidadComputadores++;
         reloj.registrar(nuevo);
         return nuevo;
@@ -91,6 +93,7 @@ public class SistemaDistribuido {
         if (destino == null) {
             return false;
         }
+        proceso.prepararProdCons();
         destino.recibirProceso(proceso);
         return true;
     }
@@ -154,6 +157,22 @@ public class SistemaDistribuido {
         return buffers[posicion];
     }
 
+    @Override
+    public Buffer buscarBuffer(String id) {
+        return getBuffer(id);
+    }
+
+    /**
+     * Despierta a un proceso bloqueado en el kernel del computador donde vive.
+     */
+    @Override
+    public void despertar(Proceso proceso) {
+        Computador destino = getComputador(proceso.getComputadorAsignado());
+        if (destino != null) {
+            destino.getKernel().despertarBloqueado(proceso);
+        }
+    }
+
     public int getCantidadBuffers() {
         return cantidadBuffers;
     }
@@ -162,6 +181,7 @@ public class SistemaDistribuido {
         return cantidadComputadores;
     }
 
+    @Override
     public int getLatenciaRed() {
         return latenciaRed;
     }
