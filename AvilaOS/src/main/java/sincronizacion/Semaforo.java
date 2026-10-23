@@ -1,6 +1,7 @@
 package sincronizacion;
 
 import modelo.Proceso;
+import java.util.concurrent.Semaphore;
 
 /**
  * Representación de un semáforo de sincronización en ÁvilaOS.
@@ -10,6 +11,9 @@ public class Semaforo {
     private String nombre;
     private int valor;
     private ColaProcesos colaBloqueados;
+    
+    // Semáforo de Java para proteger las estructuras compartidas en reemplazo de synchronized
+    private Semaphore mutexInterno;
 
     /**
      * Crea una instancia de un semáforo.
@@ -20,6 +24,8 @@ public class Semaforo {
         this.nombre = nombre;
         this.valor = valorInicial;
         this.colaBloqueados = new ColaProcesos();
+        // Inicializamos el mutex interno en 1 para garantizar exclusión mutua
+        this.mutexInterno = new Semaphore(1);
     }
 
     /**
@@ -28,13 +34,28 @@ public class Semaforo {
      * @param proceso Proceso que solicita el recurso.
      * @return true si el proceso pudo continuar, false si fue bloqueado en la cola.
      */
-    public synchronized boolean semWait(Proceso proceso) {
-        valor--;
-        if (valor < 0) {
-            colaBloqueados.encolar(proceso);
-            return false;
+    public boolean semWait(Proceso proceso) {
+        // Rechazamos proceso null según lo solicitado
+        if (proceso == null) {
+            throw new IllegalArgumentException("El proceso no puede ser null en semWait");
         }
-        return true;
+
+        boolean pudoContinuar = true;
+        try {
+            mutexInterno.acquire();
+            valor--;
+            if (valor < 0) {
+                colaBloqueados.encolar(proceso);
+                pudoContinuar = false;
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            pudoContinuar = false;
+        } finally {
+            mutexInterno.release();
+        }
+        
+        return pudoContinuar;
     }
 
     /**
@@ -42,15 +63,43 @@ public class Semaforo {
      * Incrementa el contador. Si hay procesos esperando, despierta al primero de la cola.
      * @return El proceso liberado para pasar a estado LISTO, o null si no había ninguno esperando.
      */
-    public synchronized Proceso semSignal() {
-        valor++;
-        if (valor <= 0) {
-            Proceso procesoDesbloqueado = colaBloqueados.desencolar();
-            if (procesoDesbloqueado != null) {
-                return procesoDesbloqueado;
+    public Proceso semSignal() {
+        Proceso procesoDesbloqueado = null;
+        try {
+            mutexInterno.acquire();
+            valor++;
+            if (valor <= 0) {
+                procesoDesbloqueado = colaBloqueados.desencolar();
             }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            mutexInterno.release();
         }
-        return null;
+        
+        return procesoDesbloqueado;
+    }
+
+    /**
+     * Saca al proceso de la cola del semáforo e incrementa el valor,
+     * utilizado cuando el kernel termina bloqueados por deadline = 0.
+     * @param proceso Proceso cuya espera se va a cancelar.
+     */
+    public void cancelarEspera(Proceso proceso) {
+        if (proceso == null) return;
+        
+        try {
+            mutexInterno.acquire();
+            // Corregido a quitar() para que coincida con la clase ColaProcesos
+            boolean removido = colaBloqueados.quitar(proceso); 
+            if (removido) {
+                valor++; // Deshacemos el decremento previo
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            mutexInterno.release();
+        }
     }
 
     public int getValor() { return valor; }
