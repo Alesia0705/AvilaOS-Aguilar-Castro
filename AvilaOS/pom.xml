@@ -10,4 +10,13 @@
         <maven.compiler.release>21</maven.compiler.release>
         <exec.mainClass>avilaos.AvilaOS</exec.mainClass>
     </properties>
+    
+    <dependencies>
+        <!-- Dependencia para gráficas (JFreeChart) -->
+        <dependency>
+            <groupId>org.jfree</groupId>
+            <artifactId>jfreechart</artifactId>
+            <version>1.5.4</version>
+        </dependency>
+    </dependencies>
 </project>
