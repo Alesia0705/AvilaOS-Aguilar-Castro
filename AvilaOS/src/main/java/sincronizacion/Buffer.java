@@ -57,13 +57,11 @@ public class Buffer {
      * @param elemento Objeto producido a almacenar.
      */
     public void insertar(Object elemento) {
+        mutexInterno.acquireUninterruptibly();
         try {
-            mutexInterno.acquire();
             arregloElementos[in] = elemento;
             in = (in + 1) % capacidad;
             cantidadElementos++;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } finally {
             mutexInterno.release();
         }
@@ -75,14 +73,12 @@ public class Buffer {
      */
     public Object extraer() {
         Object elemento = null;
+        mutexInterno.acquireUninterruptibly();
         try {
-            mutexInterno.acquire();
             elemento = arregloElementos[out];
             arregloElementos[out] = null;
             out = (out + 1) % capacidad;
             cantidadElementos--;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } finally {
             mutexInterno.release();
         }
@@ -94,6 +90,15 @@ public class Buffer {
     public Semaforo getVacios() { return vacios; }
     public String getId() { return id; }
     public int getIdComputadorAnfitrion() { return idComputadorAnfitrion; }
-    public int getCantidadElementos() { return cantidadElementos; }
+    
+    public int getCantidadElementos() {
+        mutexInterno.acquireUninterruptibly();
+        try {
+            return cantidadElementos;
+        } finally {
+            mutexInterno.release();
+        }
+    }
+    
     public int getCapacidad() { return capacidad; }
 }
