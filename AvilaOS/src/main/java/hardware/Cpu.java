@@ -81,15 +81,22 @@ public class Cpu implements EscuchaReloj {
 
     /**
      * Avanza un ciclo de reloj. En modo usuario ejecuta una instrucción del
-     * proceso actual; en modo sistema operativo o sin proceso, el ciclo se
-     * cuenta como de sistema o como ocioso. No decide nada: si el proceso
-     * termina, el kernel se da cuenta y lo retira.
+     * proceso actual y cuenta un ciclo de usuario. En modo sistema operativo
+     * también ejecuta la instrucción del proceso (si tiene), pero cuenta un
+     * ciclo de sistema. Sin proceso, el ciclo es ocioso. No decide nada: si el
+     * proceso termina, el kernel se da cuenta y lo retira.
      */
     public void ejecutarCiclo() {
         try {
             mutex.acquire();
             try {
                 if (modo == ModoCpu.SISTEMA_OPERATIVO) {
+                    // Las operaciones del SO (semWait, semSignal, insertar, extraer)
+                    // también son una instrucción del proceso: avanzan pc, mar y
+                    // tiempoRestante, pero se cuentan como ciclo de sistema.
+                    if (procesoActual != null && procesoActual.getTiempoRestante() > 0) {
+                        procesoActual.ejecutarInstruccion();
+                    }
                     ciclosSistema++;
                 } else if (procesoActual != null && procesoActual.getTiempoRestante() > 0) {
                     procesoActual.ejecutarInstruccion();
@@ -100,7 +107,7 @@ public class Cpu implements EscuchaReloj {
             } finally {
                 mutex.release();
             }
-                } catch (InterruptedException e) {
+        } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
     }
