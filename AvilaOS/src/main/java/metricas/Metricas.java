@@ -2,12 +2,13 @@ package metricas;
 
 import hardware.Cpu;
 import modelo.Proceso;
+import modelo.enums.TipoProceso;
 
 /**
  * Cálculo de las métricas de rendimiento. Todas se derivan de datos que ya
  * guardan la Cpu (contadores de ciclos) y el Proceso (ciclos de llegada y de
- * primera ejecución), así que esta clase no guarda estado propio.
- * El "tiempo" se mide en ciclos de reloj.
+ * primera ejecución), así que esta clase no guarda estado propio. El "tiempo"
+ * se mide en ciclos de reloj.
  */
 public class Metricas {
 
@@ -15,7 +16,9 @@ public class Metricas {
         // Clase de utilidad: solo métodos estáticos
     }
 
-    /** Fracción de ciclos en que la CPU no estuvo ociosa (0.0 a 1.0). */
+    /**
+     * Fracción de ciclos en que la CPU no estuvo ociosa (0.0 a 1.0).
+     */
     public static double utilizacion(Cpu cpu) {
         int total = cpu.getCiclosTotales();
         if (total == 0) {
@@ -24,7 +27,9 @@ public class Metricas {
         return (double) (total - cpu.getCiclosOcioso()) / total;
     }
 
-    /** Utilización del sistema completo: todas las CPU juntas. */
+    /**
+     * Utilización del sistema completo: todas las CPU juntas.
+     */
     public static double utilizacionSistema(Cpu[] cpus) {
         int total = 0;
         int ociosos = 0;
@@ -38,7 +43,10 @@ public class Metricas {
         return (double) (total - ociosos) / total;
     }
 
-    /** Procesos que terminaron todas sus instrucciones (no los que murieron por deadline). */
+    /**
+     * Procesos que terminaron todas sus instrucciones (no los que murieron por
+     * deadline).
+     */
     public static int procesosCompletados(Proceso[] terminados) {
         int completados = 0;
         for (int i = 0; i < terminados.length; i++) {
@@ -49,7 +57,9 @@ public class Metricas {
         return completados;
     }
 
-    /** Procesos completados por ciclo de reloj. */
+    /**
+     * Procesos completados por ciclo de reloj.
+     */
     public static double throughput(Proceso[] terminados, long ciclosTranscurridos) {
         if (ciclosTranscurridos <= 0) {
             return 0.0;
@@ -57,7 +67,10 @@ public class Metricas {
         return (double) procesosCompletados(terminados) / ciclosTranscurridos;
     }
 
-    /** Promedio de (primera ejecución - llegada) de los procesos que ya ejecutaron. */
+    /**
+     * Promedio de (primera ejecución - llegada) de los procesos que ya
+     * ejecutaron.
+     */
     public static double tiempoRespuestaPromedio(Proceso[] procesos) {
         long suma = 0;
         int cantidad = 0;
@@ -73,7 +86,10 @@ public class Metricas {
         return (double) suma / cantidad;
     }
 
-    /** Fracción de procesos terminados que cumplieron su deadline (0.0 si no hay datos). */
+    /**
+     * Fracción de procesos terminados que cumplieron su deadline (0.0 si no hay
+     * datos).
+     */
     public static double cumplimientoDeadlines(Proceso[] terminados) {
         if (terminados.length == 0) {
             return 0.0;
@@ -83,8 +99,8 @@ public class Metricas {
 
     /**
      * Equidad: índice de Jain sobre los tiempos de respuesta. Vale 1.0 si todos
-     * esperaron lo mismo y baja a medida que unos procesos esperan mucho más que
-     * otros. Devuelve 0.0 si todavía no hay datos.
+     * esperaron lo mismo y baja a medida que unos procesos esperan mucho más
+     * que otros. Devuelve 0.0 si todavía no hay datos.
      */
     public static double equidad(Proceso[] procesos) {
         double suma = 0;
@@ -109,5 +125,47 @@ public class Metricas {
 
     private static long tiempoRespuesta(Proceso proceso) {
         return proceso.getCicloPrimeraEjecucion() - proceso.getCicloLlegada();
+    }
+    // ---------- Productor-consumidor ----------
+
+    /**
+     * Elementos que han producido los productores que trabajan con ese buffer.
+     */
+    public static int elementosProducidos(Proceso[] procesos, String idBuffer) {
+        return sumarElementos(procesos, idBuffer, TipoProceso.PRODUCTOR);
+    }
+
+    /**
+     * Elementos que han consumido los consumidores que trabajan con ese buffer.
+     */
+    public static int elementosConsumidos(Proceso[] procesos, String idBuffer) {
+        return sumarElementos(procesos, idBuffer, TipoProceso.CONSUMIDOR);
+    }
+
+    private static int sumarElementos(Proceso[] procesos, String idBuffer, TipoProceso tipo) {
+        int total = 0;
+        for (int i = 0; i < procesos.length; i++) {
+            Proceso p = procesos[i];
+            if (p.getTipo() == tipo && idBuffer != null && idBuffer.equals(p.getIdBuffer())) {
+                total += p.getElementosProcesados();
+            }
+        }
+        return total;
+    }
+
+    /**
+     * Promedio de ciclos que los productores y consumidores pasan bloqueados en
+     * semáforos (no cuenta la latencia de red). 0 si no hay ninguno.
+     */
+    public static double tiempoPromedioBloqueoSemaforos(Proceso[] procesos) {
+        long suma = 0;
+        int cantidad = 0;
+        for (int i = 0; i < procesos.length; i++) {
+            if (procesos[i].esProdCons()) {
+                suma += procesos[i].getCiclosBloqueadoSemaforo();
+                cantidad++;
+            }
+        }
+        return (cantidad == 0) ? 0 : (double) suma / cantidad;
     }
 }
