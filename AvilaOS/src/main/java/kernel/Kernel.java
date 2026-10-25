@@ -156,6 +156,11 @@ public class Kernel {
         for (Proceso p : bloqueadosAhora) {
             p.incrementarCiclosBloqueado();
             MotivoBloqueo motivo = p.getMotivoBloqueo();
+            if (motivo == MotivoBloqueo.SEM_BUFFER_LLENO
+                    || motivo == MotivoBloqueo.SEM_BUFFER_VACIO
+                    || motivo == MotivoBloqueo.SEM_MUTEX) {
+                p.incrementarCiclosBloqueadoSemaforo();
+            }
             if (motivo != MotivoBloqueo.ESPERA_ES && motivo != MotivoBloqueo.LATENCIA_RED) {
                 continue;
             }
@@ -308,7 +313,8 @@ public class Kernel {
             servicio.despertar(despertado);
         }
     }
-        /**
+
+    /**
      * Devuelve lo que un productor/consumidor tenía tomado en los semáforos
      * cuando termina antes de tiempo (deadline). Para un proceso que termina
      * bien (fase 0) no hace nada.
@@ -354,6 +360,7 @@ public class Kernel {
                 break;
         }
     }
+
     /**
      * Pasa un proceso a terminados: libera su RAM, registra el ciclo en que el
      * kernel lo detectó terminado y lo guarda. Si termina con tiempoRestante >

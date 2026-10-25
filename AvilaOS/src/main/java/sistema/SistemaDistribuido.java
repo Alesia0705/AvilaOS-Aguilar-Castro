@@ -6,6 +6,8 @@ import planificacion.PoliticaPlanificacion;
 import sincronizacion.Buffer;
 import reloj.RelojGlobal;
 import kernel.ServicioSistema;
+import hardware.Cpu;
+import kernel.Kernel;
 
 /**
  * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster y el
@@ -176,7 +178,55 @@ public class SistemaDistribuido implements ServicioSistema {
     public int getCantidadBuffers() {
         return cantidadBuffers;
     }
+        /** CPU de cada computador: para la utilización del sistema y la gráfica. */
+    public Cpu[] getCpus() {
+        Cpu[] cpus = new Cpu[cantidadComputadores];
+        for (int i = 0; i < cantidadComputadores; i++) {
+            cpus[i] = computadores[i].getCpu();
+        }
+        return cpus;
+    }
 
+    /** Procesos terminados de todos los computadores. */
+    public Proceso[] getProcesosTerminados() {
+        Proceso[][] grupos = new Proceso[cantidadComputadores][];
+        for (int i = 0; i < cantidadComputadores; i++) {
+            grupos[i] = computadores[i].getKernel().obtenerTerminados();
+        }
+        return unir(grupos);
+    }
+
+    /** Todos los procesos del sistema: nuevos, listos, bloqueados, en CPU y terminados. */
+    public Proceso[] getTodosLosProcesos() {
+        Proceso[][] grupos = new Proceso[cantidadComputadores * 5][];
+        for (int i = 0; i < cantidadComputadores; i++) {
+            Kernel kernel = computadores[i].getKernel();
+            Proceso enCpu = computadores[i].getCpu().getProcesoActual();
+            grupos[i * 5] = kernel.obtenerNuevos();
+            grupos[i * 5 + 1] = kernel.obtenerListos();
+            grupos[i * 5 + 2] = kernel.obtenerBloqueados();
+            grupos[i * 5 + 3] = kernel.obtenerTerminados();
+            grupos[i * 5 + 4] = (enCpu == null) ? new Proceso[0] : new Proceso[]{enCpu};
+        }
+        return unir(grupos);
+    }
+
+    /** Junta varios arreglos en uno. Primero se toman todos y luego se cuenta, porque los hilos siguen corriendo. */
+    private Proceso[] unir(Proceso[][] grupos) {
+        int total = 0;
+        for (int i = 0; i < grupos.length; i++) {
+            total += grupos[i].length;
+        }
+        Proceso[] todos = new Proceso[total];
+        int posicion = 0;
+        for (int i = 0; i < grupos.length; i++) {
+            for (int j = 0; j < grupos[i].length; j++) {
+                todos[posicion] = grupos[i][j];
+                posicion++;
+            }
+        }
+        return todos;
+    }
     public int getCantidadComputadores() {
         return cantidadComputadores;
     }

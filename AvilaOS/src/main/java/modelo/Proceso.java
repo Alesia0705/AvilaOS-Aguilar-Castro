@@ -37,8 +37,9 @@ public class Proceso {
     // --- Esperas con duración fija (E/S, latencia de red) ---
     private int ciclosEsperaRestantes;
     private int ciclosCpuEnRafaga;
-    
-    
+    // ciclos bloqueado esperando un semáforo (métricas del productor-consumidor)
+    private int ciclosBloqueadoSemaforo;
+
     // --- Productor/consumidor: estado del protocolo ---
     // 0 = trabajando; 1 a 5 = paso del protocolo que le toca ejecutar
     private int faseProdCons;
@@ -258,17 +259,17 @@ public class Proceso {
     public void reiniciarRafaga() {
         ciclosCpuEnRafaga = 0;
     }
-    
-        // --- Productor/consumidor ---
+
+    // --- Productor/consumidor ---
     public boolean esProdCons() {
         return tipo == TipoProceso.PRODUCTOR || tipo == TipoProceso.CONSUMIDOR;
     }
 
     /**
      * Deja listo a un productor o consumidor: cada elemento cuesta
-     * ciclosProdCons de trabajo más 5 instrucciones del protocolo con semáforos,
-     * así que ese es el total de instrucciones que debe ejecutar.
-     * No hace nada con otros tipos de proceso.
+     * ciclosProdCons de trabajo más 5 instrucciones del protocolo con
+     * semáforos, así que ese es el total de instrucciones que debe ejecutar. No
+     * hace nada con otros tipos de proceso.
      */
     public void prepararProdCons() {
         if (!esProdCons()) {
@@ -284,23 +285,49 @@ public class Proceso {
         this.elementosProcesados = 0;
     }
 
-    public int getFaseProdCons() { return faseProdCons; }
+    public int getFaseProdCons() {
+        return faseProdCons;
+    }
 
-    public void setFaseProdCons(int fase) { this.faseProdCons = fase; }
+    public void setFaseProdCons(int fase) {
+        this.faseProdCons = fase;
+    }
 
-    /** true mientras ejecuta alguno de los 5 pasos del protocolo (modo sistema). */
-    public boolean estaEnProtocolo() { return faseProdCons >= 1; }
+    /**
+     * true mientras ejecuta alguno de los 5 pasos del protocolo (modo sistema).
+     */
+    public boolean estaEnProtocolo() {
+        return faseProdCons >= 1;
+    }
 
-    public int getTrabajoRealizado() { return trabajoRealizado; }
+    public int getTrabajoRealizado() {
+        return trabajoRealizado;
+    }
 
-    public void incrementarTrabajo() { trabajoRealizado++; }
+    public void incrementarTrabajo() {
+        trabajoRealizado++;
+    }
 
-    public void reiniciarTrabajo() { trabajoRealizado = 0; }
+    public void reiniciarTrabajo() {
+        trabajoRealizado = 0;
+    }
 
-    public int getElementosProcesados() { return elementosProcesados; }
+    public int getElementosProcesados() {
+        return elementosProcesados;
+    }
 
-    public void incrementarElementos() { elementosProcesados++; }
-    
+    public void incrementarElementos() {
+        elementosProcesados++;
+    }
+
+    public int getCiclosBloqueadoSemaforo() {
+        return ciclosBloqueadoSemaforo;
+    }
+
+    public void incrementarCiclosBloqueadoSemaforo() {
+        ciclosBloqueadoSemaforo++;
+    }
+
     @Override
     public String toString() {
         return "Proceso{" + "ID=" + id + ", Nombre='" + nombre + '\'' + ", RAM=" + memoriaRAM + "MB, Tipo='" + tipo + '\'' + '}';
