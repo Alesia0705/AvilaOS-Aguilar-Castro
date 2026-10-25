@@ -41,16 +41,13 @@ public class Semaforo {
         }
 
         boolean pudoContinuar = true;
+        mutexInterno.acquireUninterruptibly();
         try {
-            mutexInterno.acquire();
             valor--;
             if (valor < 0) {
                 colaBloqueados.encolar(proceso);
                 pudoContinuar = false;
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            pudoContinuar = false;
         } finally {
             mutexInterno.release();
         }
@@ -65,14 +62,12 @@ public class Semaforo {
      */
     public Proceso semSignal() {
         Proceso procesoDesbloqueado = null;
+        mutexInterno.acquireUninterruptibly();
         try {
-            mutexInterno.acquire();
             valor++;
             if (valor <= 0) {
                 procesoDesbloqueado = colaBloqueados.desencolar();
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } finally {
             mutexInterno.release();
         }
@@ -88,21 +83,27 @@ public class Semaforo {
     public void cancelarEspera(Proceso proceso) {
         if (proceso == null) return;
         
+        mutexInterno.acquireUninterruptibly();
         try {
-            mutexInterno.acquire();
             // Corregido a quitar() para que coincida con la clase ColaProcesos
             boolean removido = colaBloqueados.quitar(proceso); 
             if (removido) {
                 valor++; // Deshacemos el decremento previo
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } finally {
             mutexInterno.release();
         }
     }
 
-    public int getValor() { return valor; }
+    public int getValor() {
+        mutexInterno.acquireUninterruptibly();
+        try {
+            return valor;
+        } finally {
+            mutexInterno.release();
+        }
+    }
+    
     public String getNombre() { return nombre; }
     public ColaProcesos getColaBloqueados() { return colaBloqueados; }
 }
