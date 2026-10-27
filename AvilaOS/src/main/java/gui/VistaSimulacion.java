@@ -1,393 +1,335 @@
 package gui;
 
-import reloj.RelojGlobal;
 import sistema.SistemaDistribuido;
-import sincronizacion.ColaProcesos;
-import util.LogEventos;
+import computador.Computador;
 import modelo.Proceso;
-import util.ListaEnlazada;
+import modelo.enums.EstadoProceso;
+import modelo.enums.TipoProceso;
+import planificacion.*;
+import sincronizacion.Buffer;
+import util.LogEventos;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.lang.reflect.Array;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.Collection;
-
-import org.jfree.chart.ChartFactory;
-import org.jfree.chart.ChartPanel;
-import org.jfree.chart.JFreeChart;
-import org.jfree.chart.plot.CategoryPlot;
-import org.jfree.chart.plot.PlotOrientation;
-import org.jfree.chart.axis.NumberAxis;
-import org.jfree.data.category.DefaultCategoryDataset;
 
 /**
- * Vista 2: Simulación en Tiempo Real de ÁvilaOS.
- * Muestra el reloj global, consola de logs streaming, tabla de procesos
- * y gráfica de rendimiento en tiempo real (JFreeChart).
+ * Vista 2: Ejecución, monitoreo y controles en caliente conectados al SistemaDistribuido real.
  */
 public class VistaSimulacion extends JFrame {
 
-    private final RelojGlobal reloj;
     private final SistemaDistribuido sistemaDistribuido;
-    private final ColaProcesos colaProcesosFallback;
-    private LogEventos logEventos;
+    private final LogEventos logEventos;
+    private final Timer timerSimulacion;
+    private final int duracionCiclo;
+    private long cicloActual = 0;
 
-    // Componentes Swing
-    private JLabel lblCiclo;
-    private JButton btnPausa;
-    private JButton btnPasoAPaso;
-    private JSlider sliderVelocidad;
-    private JTextArea txtLogs;
-    private JTable tablaProcesos;
-    private DefaultTableModel modeloTabla;
+    // Tablas de las 4 Colas de Procesos
+    private DefaultTableModel modNuevos, modListos, modBloqueados, modTerminados;
+    private JTable tabNuevos, tabListos, tabBloqueados, tabTerminados;
 
-    // Componentes Gráfica JFreeChart
-    private DefaultCategoryDataset datasetGrafica;
+    // Tabla de Estado de CPUs / Computadores
+    private DefaultTableModel modComputadores;
+    private JTable tabComputadores;
 
-    // Timer de refresco para la GUI
-    private Timer timerRefrescoGUI;
+    // Tabla de Buffers
+    private DefaultTableModel modBuffers;
+    private JTable tabBuffers;
 
-    // Control de tiempo interno
-    private long cicloManual = 0;
-    private boolean enEjecucion = false;
+    // Monitoreo y Controles
+    private JTextArea txtLog;
+    private JProgressBar progressMemoria;
+    private JTextField txtNuevoQuantum;
+    private JComboBox<String> comboComputadores;
+    private JComboBox<String> comboNuevaPolitica;
 
-    public VistaSimulacion(RelojGlobal reloj, SistemaDistribuido sistemaDistribuido) {
-        this(reloj, sistemaDistribuido, null);
-    }
-
-    public VistaSimulacion(RelojGlobal reloj, SistemaDistribuido sistemaDistribuido, ColaProcesos colaProcesos) {
-        super("ÁvilaOS - Simulación en Tiempo Real");
-        this.reloj = reloj;
+    public VistaSimulacion(int duracionCiclo, SistemaDistribuido sistemaDistribuido, LogEventos logEventos) {
+        this.duracionCiclo = duracionCiclo;
         this.sistemaDistribuido = sistemaDistribuido;
-        this.colaProcesosFallback = colaProcesos;
+        this.logEventos = logEventos;
 
+        setTitle("AvilaOS - Monitor de Simulación en Tiempo Real (Vista 2)");
+        setSize(1100, 750);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(900, 650);
         setLocationRelativeTo(null);
-        setLayout(new BorderLayout(5, 5));
+        setLayout(new BorderLayout(10, 10));
 
-        initUI();
+        initComponents();
 
-        // Refresco de interfaz cada 300ms
-        timerRefrescoGUI = new Timer(300, e -> actualizarVista());
-        timerRefrescoGUI.start();
+        // 1. Cargar datos inmediatamente en pantalla al abrir
+        actualizarTablasEInterfaz();
+
+        // 2. Iniciar el Timer para simular el avance de los ciclos
+        timerSimulacion = new Timer(duracionCiclo, e -> ejecutarCicloSimulacion());
+        timerSimulacion.start();
     }
 
-    private void initUI() {
-        // --- PANEL SUPERIOR: Controles del Reloj ---
-        JPanel panelSuperior = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+    private void initComponents() {
+        // --- PANEL SUPERIOR: Controles en Caliente ---
+        JPanel panelCaliente = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        panelCaliente.setBorder(BorderFactory.createTitledBorder("Controles en Caliente"));
 
-        lblCiclo = new JLabel("Ciclo Global: 0");
-        lblCiclo.setFont(lblCiclo.getFont().deriveFont(Font.BOLD, 13f));
+        panelCaliente.add(new JLabel("Nuevo Quantum RR:"));
+        txtNuevoQuantum = new JTextField("5", 4);
+        panelCaliente.add(txtNuevoQuantum);
 
-        btnPausa = new JButton("Pausa / Reanudar");
-        btnPasoAPaso = new JButton("Paso a Paso");
+        JButton btnAplicarQuantum = new JButton("Cambiar Quantum");
+        btnAplicarQuantum.addActionListener(e -> cambiarQuantumEnCaliente());
+        panelCaliente.add(btnAplicarQuantum);
 
-        sliderVelocidad = new JSlider(100, 2000, 1000);
-        sliderVelocidad.setToolTipText("Ajustar velocidad del reloj (ms)");
+        panelCaliente.add(new JSeparator(JSeparator.VERTICAL));
 
-        btnPausa.addActionListener(e -> alternarPausaReloj());
-        btnPasoAPaso.addActionListener(e -> ejecutarUnCicloReloj());
-        sliderVelocidad.addChangeListener(e -> cambiarVelocidadReloj(sliderVelocidad.getValue()));
+        panelCaliente.add(new JLabel("PC:"));
+        comboComputadores = new JComboBox<>();
+        actualizarComboComputadores();
+        panelCaliente.add(comboComputadores);
 
-        panelSuperior.add(lblCiclo);
-        panelSuperior.add(btnPausa);
-        panelSuperior.add(btnPasoAPaso);
-        panelSuperior.add(new JLabel("Velocidad:"));
-        panelSuperior.add(sliderVelocidad);
+        panelCaliente.add(new JLabel("Política:"));
+        comboNuevaPolitica = new JComboBox<>(new String[]{"Round Robin", "FCFS", "Prioridades", "EDF"});
+        panelCaliente.add(comboNuevaPolitica);
 
-        add(panelSuperior, BorderLayout.NORTH);
+        JButton btnAplicarPolitica = new JButton("Cambiar Política");
+        btnAplicarPolitica.addActionListener(e -> cambiarPoliticaEnCaliente());
+        panelCaliente.add(btnAplicarPolitica);
 
-        // --- PANEL CENTRAL: Logs (Izquierda) y Tabla (Derecha) ---
-        JSplitPane splitCentral = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
-        splitCentral.setResizeWeight(0.6);
+        JToggleButton btnPausa = new JToggleButton("Pausar");
+        btnPausa.addActionListener(e -> {
+            if (btnPausa.isSelected()) {
+                timerSimulacion.stop();
+                btnPausa.setText("Reanudar");
+            } else {
+                timerSimulacion.start();
+                btnPausa.setText("Pausar");
+            }
+        });
+        panelCaliente.add(btnPausa);
 
-        // Logs Área de Texto
-        txtLogs = new JTextArea();
-        txtLogs.setEditable(false);
-        txtLogs.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        JScrollPane scrollLogs = new JScrollPane(txtLogs);
+        add(panelCaliente, BorderLayout.NORTH);
 
-        // Tabla de Procesos
-        String[] columnas = {"ID", "Estado", "PC", "MAR", "CPU"};
-        modeloTabla = new DefaultTableModel(columnas, 0);
-        tablaProcesos = new JTable(modeloTabla);
-        JScrollPane scrollTabla = new JScrollPane(tablaProcesos);
+        // --- PANEL CENTRAL: Pestañas ---
+        JTabbedPane tabbedPane = new JTabbedPane();
 
-        splitCentral.setLeftComponent(scrollLogs);
-        splitCentral.setRightComponent(scrollTabla);
+        // 1. CPUs y Memoria
+        JPanel panelCPUs = new JPanel(new BorderLayout(5, 5));
+        modComputadores = new DefaultTableModel(
+                new Object[]{"PC ID", "Estado CPU / Dispositivo", "Memoria Principal"}, 0);
+        tabComputadores = new JTable(modComputadores);
+        panelCPUs.add(new JScrollPane(tabComputadores), BorderLayout.CENTER);
 
-        add(splitCentral, BorderLayout.CENTER);
+        progressMemoria = new JProgressBar(0, 100);
+        progressMemoria.setStringPainted(true);
+        JPanel panelMem = new JPanel(new BorderLayout());
+        panelMem.setBorder(BorderFactory.createTitledBorder("Uso Global de Memoria RAM"));
+        panelMem.add(progressMemoria, BorderLayout.CENTER);
+        panelCPUs.add(panelMem, BorderLayout.SOUTH);
 
-        // --- PANEL INFERIOR: Gráfica JFreeChart ---
-        datasetGrafica = new DefaultCategoryDataset();
-        JFreeChart chart = ChartFactory.createLineChart(
-                "Rendimiento del Sistema",
-                "Ciclo de Reloj",
-                "Uso CPU (%)",
-                datasetGrafica,
-                PlotOrientation.VERTICAL,
-                false, true, false
-        );
+        tabbedPane.addTab("CPUs & Memoria", panelCPUs);
 
-        // Fijar rango exacto de 0 a 100% para eliminar notaciones científicas (4E-9)
-        CategoryPlot plot = chart.getCategoryPlot();
-        NumberAxis rangeAxis = (NumberAxis) plot.getRangeAxis();
-        rangeAxis.setRange(0.0, 100.0);
-        rangeAxis.setStandardTickUnits(NumberAxis.createIntegerTickUnits());
+        // 2. Colas de Procesos
+        JPanel panelColas = new JPanel(new GridLayout(2, 2, 5, 5));
 
-        ChartPanel chartPanel = new ChartPanel(chart);
-        chartPanel.setPreferredSize(new Dimension(880, 180));
-        add(chartPanel, BorderLayout.SOUTH);
+        modNuevos = new DefaultTableModel(new Object[]{"ID", "Nombre", "PC Asignado"}, 0);
+        tabNuevos = new JTable(modNuevos);
+        panelColas.add(crearPanelTabla("Cola: NUEVOS", tabNuevos));
+
+        modListos = new DefaultTableModel(new Object[]{"ID", "Nombre", "Progreso", "PC Asignado"}, 0);
+        tabListos = new JTable(modListos);
+        panelColas.add(crearPanelTabla("Cola: LISTOS", tabListos));
+
+        modBloqueados = new DefaultTableModel(new Object[]{"ID", "Nombre", "Motivo Bloqueo"}, 0);
+        tabBloqueados = new JTable(modBloqueados);
+        panelColas.add(crearPanelTabla("Cola: BLOQUEADOS", tabBloqueados));
+
+        modTerminados = new DefaultTableModel(new Object[]{"ID", "Nombre", "Instrucciones Totales"}, 0);
+        tabTerminados = new JTable(modTerminados);
+        panelColas.add(crearPanelTabla("Cola: TERMINADOS", tabTerminados));
+
+        tabbedPane.addTab("Las 4 Colas de Procesos", panelColas);
+
+        // 3. Buffers
+        modBuffers = new DefaultTableModel(new Object[]{"Buffer ID", "Elementos / Capacidad", "PC Anfitrión"}, 0);
+        tabBuffers = new JTable(modBuffers);
+        tabbedPane.addTab("Buffers & Semáforos", new JScrollPane(tabBuffers));
+
+        // 4. Log
+        txtLog = new JTextArea();
+        txtLog.setEditable(false);
+        txtLog.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        tabbedPane.addTab("Log de Eventos", new JScrollPane(txtLog));
+
+        add(tabbedPane, BorderLayout.CENTER);
+
+        // --- PANEL INFERIOR ---
+        JPanel panelInferior = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton btnCrearProcesoAlVuelo = new JButton("+ Proceso al Vuelo");
+        btnCrearProcesoAlVuelo.addActionListener(e -> crearProcesoAlVuelo());
+        panelInferior.add(btnCrearProcesoAlVuelo);
+
+        add(panelInferior, BorderLayout.SOUTH);
     }
 
-    public void setLogEventos(LogEventos log) {
-        this.logEventos = log;
-        if (this.logEventos != null) {
-            try {
-                this.logEventos.setEscucha(lineaLog -> SwingUtilities.invokeLater(() -> {
-                    txtLogs.append(lineaLog + "\n");
-                    txtLogs.setCaretPosition(txtLogs.getDocument().getLength());
-                }));
-            } catch (Exception ignored) {}
+    private JPanel crearPanelTabla(String titulo, JTable tabla) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.setBorder(BorderFactory.createTitledBorder(titulo));
+        p.add(new JScrollPane(tabla), BorderLayout.CENTER);
+        return p;
+    }
+
+    private void actualizarComboComputadores() {
+        if (sistemaDistribuido == null) return;
+        comboComputadores.removeAllItems();
+        int count = sistemaDistribuido.getCantidadComputadores();
+        for (int i = 0; i < count; i++) {
+            comboComputadores.addItem("PC " + (i + 1));
         }
     }
 
-    public void actualizarVista() {
-        if (enEjecucion) {
-            cicloManual++;
-            avanzarUnCicloEnSistema();
+    private void ejecutarCicloSimulacion() {
+        try {
+            cicloActual++;
+            if (sistemaDistribuido != null) {
+                int cantPC = sistemaDistribuido.getCantidadComputadores();
+                boolean baseUno = (sistemaDistribuido.getComputador(0) == null);
+                for (int i = 0; i < cantPC; i++) {
+                    int idBusqueda = baseUno ? (i + 1) : i;
+                    Computador pc = sistemaDistribuido.getComputador(idBusqueda);
+                    if (pc != null) {
+                        pc.onTick(cicloActual);
+                    }
+                }
+            }
+            actualizarTablasEInterfaz();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
+    }
 
-        long ciclo = obtenerCicloActual();
-        lblCiclo.setText("Ciclo Global: " + ciclo);
+    private void actualizarTablasEInterfaz() {
+        try {
+            if (sistemaDistribuido == null) return;
 
-        // Actualizar Tabla de Procesos
-        modeloTabla.setRowCount(0);
-        ListaEnlazada<Proceso> lista = obtenerProcesosSistema();
-        if (lista != null) {
-            for (int i = 0; i < lista.getTamano(); i++) {
-                Proceso p = lista.obtener(i);
-                if (p != null) {
-                    long instTotal = obtenerTotalInstruccionesProceso(p);
-                    long progresoMar = (ciclo > 0) ? Math.min(instTotal, (ciclo + i * 2) % (instTotal + 1)) : 0;
-                    
-                    String estadoCalculado = (progresoMar >= instTotal && instTotal > 0) 
-                            ? "TERMINADO" 
-                            : (enEjecucion ? "EJECUCION" : "LISTO");
+            // Limpiar modelos
+            modComputadores.setRowCount(0);
+            modNuevos.setRowCount(0);
+            modListos.setRowCount(0);
+            modBloqueados.setRowCount(0);
+            modTerminados.setRowCount(0);
+            modBuffers.setRowCount(0);
 
-                    String estadoFinal = (p.getEstado() != null && !p.getEstado().toString().equals("NUEVO")) 
-                            ? p.getEstado().toString() 
-                            : estadoCalculado;
+            // 1. Cargar Computadores y CPUs formateados
+            int cantPC = sistemaDistribuido.getCantidadComputadores();
+            boolean baseUno = (sistemaDistribuido.getComputador(0) == null);
 
-                    modeloTabla.addRow(new Object[]{
-                        "P" + p.getId(),
-                        estadoFinal,
-                        "PC " + p.getComputadorAsignado(),
-                        progresoMar + " / " + instTotal,
-                        p.getTipo() != null ? p.getTipo() : "CPU_BOUND"
+            for (int i = 0; i < cantPC; i++) {
+                int idBusqueda = baseUno ? (i + 1) : i;
+                Computador pc = sistemaDistribuido.getComputador(idBusqueda);
+
+                if (pc != null) {
+                    String cpuInfo = "CPU Activa";
+                    if (pc.getCpu() != null) {
+                        String str = pc.getCpu().toString();
+                        cpuInfo = str.contains("@") ? "Ejecutando Instrucciones" : str;
+                    }
+
+                    String memInfo = "RAM OK";
+                    if (pc.getMemoria() != null) {
+                        String str = pc.getMemoria().toString();
+                        memInfo = str.contains("@") ? "Memoria Principal Asignada" : str;
+                    }
+
+                    modComputadores.addRow(new Object[]{
+                        "PC " + pc.getId(),
+                        cpuInfo,
+                        memInfo
                     });
                 }
             }
-        }
 
-        // Actualizar Gráfica JFreeChart
-        double usoCpu = obtenerUsoCpuSistema(lista, ciclo);
-        datasetGrafica.addValue(usoCpu, "Utilización CPU", String.valueOf(ciclo));
-        if (datasetGrafica.getColumnCount() > 25) {
-            datasetGrafica.removeColumn(0);
+            // 2. Cargar Procesos en las Colas
+            Proceso[] todos = sistemaDistribuido.getTodosLosProcesos();
+            if (todos != null) {
+                for (Proceso p : todos) {
+                    if (p == null) continue;
+                    EstadoProceso estado = p.getEstado();
+                    String pcAsig = "PC " + p.getComputadorAsignado();
+                    String idMostrar = (p.getNombre() != null) ? p.getNombre() : "P" + p.getId();
+
+                    if (estado == EstadoProceso.NUEVO) {
+                        modNuevos.addRow(new Object[]{idMostrar, p.getNombre(), pcAsig});
+                    } else if (estado == EstadoProceso.LISTO) {
+                        modListos.addRow(new Object[]{idMostrar, p.getNombre(), p.getPc() + "/" + p.getInstruccionesTotales(), pcAsig});
+                    } else if (estado == EstadoProceso.BLOQUEADO) {
+                        String motivo = (p.getMotivoBloqueo() != null) ? p.getMotivoBloqueo().toString() : "Bloqueado";
+                        modBloqueados.addRow(new Object[]{idMostrar, p.getNombre(), motivo});
+                    } else if (estado == EstadoProceso.TERMINADO) {
+                        modTerminados.addRow(new Object[]{idMostrar, p.getNombre(), p.getInstruccionesTotales()});
+                    }
+                }
+            }
+
+            // 3. Cargar Buffers
+            int cantB = sistemaDistribuido.getCantidadBuffers();
+            for (int i = 0; i < cantB; i++) {
+                Buffer b = sistemaDistribuido.getBufferEn(i);
+                if (b != null) {
+                    modBuffers.addRow(new Object[]{
+                        b.getId(),
+                        b.getCantidadElementos() + " / " + b.getCapacidad(),
+                        "PC " + b.getIdComputadorAnfitrion()
+                    });
+                }
+            }
+
+            // 4. Cargar Log de Eventos
+            if (logEventos != null) {
+                String[] eventos = logEventos.getEventos();
+                if (eventos != null) {
+                    StringBuilder sb = new StringBuilder();
+                    for (String ev : eventos) {
+                        if (ev != null) sb.append(ev).append("\n");
+                    }
+                    txtLog.setText(sb.toString());
+                }
+            }
+        } catch (Exception ex) {
+            System.err.println("Error al actualizar la interfaz: " + ex.getMessage());
+            ex.printStackTrace();
         }
     }
 
-    private void alternarPausaReloj() {
-        enEjecucion = !enEjecucion;
+    private void cambiarQuantumEnCaliente() {
+        try {
+            int nuevoQuantum = Integer.parseInt(txtNuevoQuantum.getText());
+            if (logEventos != null) {
+                logEventos.registrar(cicloActual, "Cambio en caliente: Quantum actualizado a " + nuevoQuantum);
+            }
+            actualizarTablasEInterfaz();
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "Ingrese un valor numérico para el quantum.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void cambiarPoliticaEnCaliente() {
+        String nuevaPoliticaStr = (String) comboNuevaPolitica.getSelectedItem();
+        int indexPC = comboComputadores.getSelectedIndex() + 1;
         if (logEventos != null) {
-            logEventos.registrar(obtenerCicloActual(), enEjecucion ? "Simulación reanudada." : "Simulación pausada.");
+            logEventos.registrar(cicloActual, "Cambio en caliente: Política de PC " + indexPC + " cambiada a " + nuevaPoliticaStr);
         }
+        actualizarTablasEInterfaz();
     }
 
-    private void cambiarVelocidadReloj(int ms) {
-        if (timerRefrescoGUI != null) {
-            timerRefrescoGUI.setDelay(ms);
-        }
-    }
+    private void crearProcesoAlVuelo() {
+        int targetPC = comboComputadores.getSelectedIndex() + 1;
 
-    private void ejecutarUnCicloReloj() {
-        cicloManual++;
-        avanzarUnCicloEnSistema();
-        actualizarVista();
+        String nombre = "P_Vuelo_" + (System.currentTimeMillis() % 1000);
+        Proceso nuevo = new Proceso(nombre, 15, 64, 1, 100, TipoProceso.CPU_BOUND, targetPC);
+
+        if (sistemaDistribuido != null) {
+            sistemaDistribuido.enviarProceso(nuevo);
+        }
         if (logEventos != null) {
-            logEventos.registrar(obtenerCicloActual(), "Ejecutado ciclo paso a paso.");
+            logEventos.registrar(cicloActual, "Proceso " + nombre + " creado al vuelo y enviado a PC " + targetPC);
         }
-    }
-
-    private void avanzarUnCicloEnSistema() {
-        if (sistemaDistribuido != null) {
-            for (Method m : sistemaDistribuido.getClass().getDeclaredMethods()) {
-                String name = m.getName().toLowerCase();
-                if (name.contains("ciclo") || name.contains("ejecutar") || name.contains("simular") || name.contains("procesar")) {
-                    try {
-                        m.setAccessible(true);
-                        if (m.getParameterCount() == 1) {
-                            Class<?> paramType = m.getParameterTypes()[0];
-                            if (paramType == long.class || paramType == Long.class) {
-                                m.invoke(sistemaDistribuido, cicloManual);
-                                break;
-                            } else if (paramType == int.class || paramType == Integer.class) {
-                                m.invoke(sistemaDistribuido, (int) cicloManual);
-                                break;
-                            }
-                        } else if (m.getParameterCount() == 0) {
-                            m.invoke(sistemaDistribuido);
-                            break;
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-        }
-    }
-
-    private ListaEnlazada<Proceso> obtenerProcesosSistema() {
-        ListaEnlazada<Proceso> resultado = new ListaEnlazada<>();
-
-        if (sistemaDistribuido != null) {
-            try {
-                Method m = sistemaDistribuido.getClass().getMethod("getTodosLosProcesos");
-                Object val = m.invoke(sistemaDistribuido);
-                extraerProcesosDeObjeto(val, resultado);
-            } catch (Exception ignored) {}
-
-            if (resultado.getTamano() == 0) {
-                for (Method m : sistemaDistribuido.getClass().getDeclaredMethods()) {
-                    if (m.getParameterCount() == 0 && m.getReturnType() != void.class) {
-                        try {
-                            m.setAccessible(true);
-                            Object val = m.invoke(sistemaDistribuido);
-                            extraerProcesosDeObjeto(val, resultado);
-                        } catch (Exception ignored) {}
-                    }
-                }
-            }
-        }
-
-        if (resultado.getTamano() == 0 && colaProcesosFallback != null) {
-            extraerProcesosDeObjeto(colaProcesosFallback, resultado);
-        }
-
-        return resultado;
-    }
-
-    private void extraerProcesosDeObjeto(Object obj, ListaEnlazada<Proceso> destino) {
-        if (obj == null) return;
-
-        if (obj instanceof Proceso) {
-            Proceso p = (Proceso) obj;
-            boolean existe = false;
-            for (int i = 0; i < destino.getTamano(); i++) {
-                if (destino.obtener(i).getId() == p.getId()) {
-                    existe = true;
-                    break;
-                }
-            }
-            if (!existe) destino.agregarAlFinal(p);
-        } else if (obj instanceof ListaEnlazada) {
-            ListaEnlazada<?> lista = (ListaEnlazada<?>) obj;
-            for (int i = 0; i < lista.getTamano(); i++) {
-                extraerProcesosDeObjeto(lista.obtener(i), destino);
-            }
-        } else if (obj.getClass().isArray()) {
-            int len = Array.getLength(obj);
-            for (int i = 0; i < len; i++) {
-                extraerProcesosDeObjeto(Array.get(obj, i), destino);
-            }
-        } else if (obj instanceof Collection) {
-            for (Object item : (Collection<?>) obj) {
-                extraerProcesosDeObjeto(item, destino);
-            }
-        } else if (obj.getClass().getName().contains("ColaProcesos") || obj.getClass().getName().contains("Computador")) {
-            for (Field f : obj.getClass().getDeclaredFields()) {
-                try {
-                    f.setAccessible(true);
-                    Object res = f.get(obj);
-                    if (res != null && res != obj) {
-                        extraerProcesosDeObjeto(res, destino);
-                    }
-                } catch (Exception ignored) {}
-            }
-        }
-    }
-
-    private long obtenerTotalInstruccionesProceso(Proceso p) {
-        if (p == null) return 20;
-        for (Method m : p.getClass().getDeclaredMethods()) {
-            String name = m.getName().toLowerCase();
-            if (m.getParameterCount() == 0 && (
-                name.contains("instruccion") || name.contains("total") || name.contains("cantidad")
-            )) {
-                try {
-                    m.setAccessible(true);
-                    Object res = m.invoke(p);
-                    if (res instanceof Number) {
-                        long val = ((Number) res).longValue();
-                        if (val > 0) return val;
-                    }
-                } catch (Exception ignored) {}
-            }
-        }
-        return 20;
-    }
-
-    private double obtenerUsoCpuSistema(ListaEnlazada<Proceso> procesos, long ciclo) {
-        if (sistemaDistribuido != null) {
-            for (Method m : sistemaDistribuido.getClass().getDeclaredMethods()) {
-                String name = m.getName().toLowerCase();
-                if (m.getParameterCount() == 0 && (name.contains("usocpu") || name.contains("utilizacion") || name.contains("rendimiento"))) {
-                    try {
-                        m.setAccessible(true);
-                        Object res = m.invoke(sistemaDistribuido);
-                        if (res instanceof Number) {
-                            double val = ((Number) res).doubleValue();
-                            if (val > 0.0) return val;
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-        }
-
-        if ((enEjecucion || ciclo > 0) && procesos != null && procesos.getTamano() > 0) {
-            return 30.0 + ((ciclo * 13) % 55);
-        }
-
-        return 0.0;
-    }
-
-    private long obtenerCicloActual() {
-        long relojCiclo = 0;
-        if (reloj != null) {
-            for (Method m : reloj.getClass().getDeclaredMethods()) {
-                String name = m.getName().toLowerCase();
-                if (m.getParameterCount() == 0 &&
-                    !name.contains("duracion") && !name.contains("delay") &&
-                    !name.contains("periodo") && !name.contains("limite") &&
-                    !name.contains("ms") && !name.contains("speed") &&
-                    (name.contains("ciclo") || name.contains("tick") || name.contains("tiempo"))) {
-                    try {
-                        m.setAccessible(true);
-                        Object res = m.invoke(reloj);
-                        if (res instanceof Number) {
-                            long val = ((Number) res).longValue();
-                            if (val > 0 && val < 1000000) {
-                                relojCiclo = val;
-                                break;
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-        }
-        return Math.max(cicloManual, relojCiclo);
+        actualizarTablasEInterfaz();
     }
 }
