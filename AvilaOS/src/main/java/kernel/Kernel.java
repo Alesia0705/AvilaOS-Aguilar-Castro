@@ -297,7 +297,7 @@ public class Kernel {
                 } else {
                     buffer.extraer();
                 }
-                registrar(p.getNombre() + (productor ? " inserta en " : " extrae de ") + "el buffer "
+                registrar(p.getNombre() + (productor ? " inserta en el buffer " : " extrae del buffer ")
                         + buffer.getId() + " (elementos: " + buffer.getCantidadElementos() + "/"
                         + buffer.getCapacidad() + ").");
                 p.setFaseProdCons(4);
