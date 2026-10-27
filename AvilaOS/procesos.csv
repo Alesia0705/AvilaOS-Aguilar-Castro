@@ -1,0 +1,2 @@
+ID,Nombre,Instrucciones,RAM_MB,Prioridad,Deadline,Tipo,Computador,CiclosCPU,CiclosIO,IDBuffer,CiclosProdCons,CantidadElementos
+1,Proceso_1,20,128,1,10,PRODUCTOR,1,0,0,BUF-1,2,1
