@@ -274,6 +274,9 @@ public class Kernel {
                     p.setFaseProdCons(1);
                     boolean remoto = buffer.getIdComputadorAnfitrion() != cpu.getIdComputador();
                     if (remoto && servicio.getLatenciaRed() > 0) {
+                        registrar(p.getNombre() + " accede al buffer remoto " + buffer.getId() + " (computador "
+                                + buffer.getIdComputadorAnfitrion() + "): espera "
+                                + servicio.getLatenciaRed() + " ciclos de latencia de red.");
                         p.setEstado(EstadoProceso.BLOQUEADO);
                         p.setMotivoBloqueo(MotivoBloqueo.LATENCIA_RED);
                         p.setCiclosEsperaRestantes(servicio.getLatenciaRed());
@@ -294,14 +297,17 @@ public class Kernel {
                 } else {
                     buffer.extraer();
                 }
+                registrar(p.getNombre() + (productor ? " inserta en " : " extrae de ") + "el buffer "
+                        + buffer.getId() + " (elementos: " + buffer.getCantidadElementos() + "/"
+                        + buffer.getCapacidad() + ").");
                 p.setFaseProdCons(4);
                 return true;
             case 4:
-                despertarProceso(buffer.getMutex().semSignal());
+                senalar(buffer.getMutex(), p);
                 p.setFaseProdCons(5);
                 return true;
             default:
-                despertarProceso(segundo.semSignal());
+                senalar(segundo, p);
                 p.incrementarElementos();
                 p.setFaseProdCons(0);
                 return true;
@@ -324,9 +330,29 @@ public class Kernel {
             bloqueados.quitar(p);
             p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
             p.setEstado(EstadoProceso.EJECUCION);
+            registrar(p.getNombre() + " semWait(" + semaforo.getNombre() + "): pasa (valor "
+                    + semaforo.getValor() + ").");
             return true;
         }
+        registrar(p.getNombre() + " semWait(" + semaforo.getNombre() + "): se bloquea (valor "
+                + semaforo.getValor() + ").");
         return false;
+    }
+
+    /**
+     * semSignal del proceso: lo anota en el log y, si había alguien esperando
+     * en ese semáforo, lo despierta.
+     */
+    private void senalar(Semaforo semaforo, Proceso quien) {
+        Proceso despertado = semaforo.semSignal();
+        if (despertado != null) {
+            registrar(quien.getNombre() + " semSignal(" + semaforo.getNombre() + "): despierta a "
+                    + despertado.getNombre() + ".");
+        } else {
+            registrar(quien.getNombre() + " semSignal(" + semaforo.getNombre() + "): valor "
+                    + semaforo.getValor() + ".");
+        }
+        despertarProceso(despertado);
     }
 
     private void despertarProceso(Proceso despertado) {
@@ -360,23 +386,23 @@ public class Kernel {
         if (motivo == MotivoBloqueo.SEM_MUTEX) {
             // esperaba el mutex, pero ya tenía el permiso del primer semáforo
             buffer.getMutex().cancelarEspera(p);
-            despertarProceso(primero.semSignal());
+            senalar(primero, p);
             return;
         }
         switch (p.getFaseProdCons()) {
             case 2:
-                despertarProceso(primero.semSignal());
+                senalar(primero, p);
                 break;
             case 3:
-                despertarProceso(buffer.getMutex().semSignal());
-                despertarProceso(primero.semSignal());
+                senalar(buffer.getMutex(), p);
+                senalar(primero, p);
                 break;
             case 4:
-                despertarProceso(buffer.getMutex().semSignal());
-                despertarProceso(segundo.semSignal());
+                senalar(buffer.getMutex(), p);
+                senalar(segundo, p);
                 break;
             case 5:
-                despertarProceso(segundo.semSignal());
+                senalar(segundo, p);
                 break;
             default:
                 break;
