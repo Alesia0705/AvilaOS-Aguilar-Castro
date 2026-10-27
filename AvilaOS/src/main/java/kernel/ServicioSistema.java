@@ -20,4 +20,7 @@ public interface ServicioSistema {
 
     /** Pasa a LISTO a un proceso bloqueado, en el computador donde vive. */
     void despertar(Proceso proceso);
+    
+    /** Registra un evento en el log del sistema (si hay uno conectado). */
+    void registrarEvento(long ciclo, String descripcion);
 }
