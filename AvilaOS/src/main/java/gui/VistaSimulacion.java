@@ -151,6 +151,8 @@ public class VistaSimulacion extends JFrame {
 
         txtLogs.setEditable(false);
         txtLogs.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        txtLogs.setLineWrap(true);
+        txtLogs.setWrapStyleWord(true);
         JScrollPane scrollLogs = new JScrollPane(txtLogs);
         scrollLogs.setBorder(BorderFactory.createTitledBorder("Log de eventos"));
 
