@@ -34,6 +34,9 @@ public class Kernel {
     // Ciclos seguidos que lleva el proceso actual en la CPU (para el quantum)
     private int ciclosEnCpu;
 
+    // Último ciclo en que el kernel tomó decisiones; se usa como fecha de los eventos del log
+    private volatile long cicloLog;
+
     public Kernel(Memoria memoria, Cpu cpu, PoliticaPlanificacion politica) {
         if (memoria == null || cpu == null || politica == null) {
             throw new IllegalArgumentException("El kernel necesita memoria, CPU y política");
@@ -46,6 +49,17 @@ public class Kernel {
         this.listos = new ColaProcesos();
         this.bloqueados = new ColaProcesos();
         this.terminados = new ColaProcesos();
+    }
+
+    /**
+     * Anota un evento de este computador en el log del sistema (si hay uno
+     * conectado). La fecha es el ciclo en que el kernel está decidiendo.
+     */
+    private void registrar(String descripcion) {
+        ServicioSistema servicio = sistema;
+        if (servicio != null) {
+            servicio.registrarEvento(cicloLog, "Computador " + cpu.getIdComputador() + ": " + descripcion);
+        }
     }
 
     /**
@@ -79,10 +93,14 @@ public class Kernel {
                 nuevos.quitar(p);
                 p.setEstado(EstadoProceso.TERMINADO);
                 terminados.encolar(p);
+                registrar(p.getNombre() + " rechazado: pide " + ram + " de RAM y el computador tiene "
+                        + memoria.getCapacidadTotal() + ".");
             } else if (memoria.reservar(ram)) {
                 nuevos.quitar(p);
                 p.setEstado(EstadoProceso.LISTO);
                 listos.encolar(p);
+                registrar(p.getNombre() + " admitido en memoria (RAM " + ram + ", libre "
+                        + memoria.getLibre() + ").");
             }
         }
     }
@@ -95,6 +113,7 @@ public class Kernel {
         // Se lee una sola vez: si la interfaz cambia la política a mitad de ciclo,
         // este ciclo termina con la política con la que empezó.
         PoliticaPlanificacion actual = politica;
+        cicloLog = ciclo;
 
         admitirNuevos();
         descontarDeadlines(ciclo);
@@ -170,6 +189,8 @@ public class Kernel {
                 p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
                 p.setEstado(EstadoProceso.LISTO);
                 listos.encolar(p);
+                registrar(p.getNombre() + " vuelve a listos ("
+                        + (motivo == MotivoBloqueo.ESPERA_ES ? "terminó la E/S" : "llegó el dato remoto") + ").");
             }
         }
     }
@@ -219,6 +240,7 @@ public class Kernel {
         p.setCiclosEsperaRestantes(p.getCiclosIo());
         p.reiniciarRafaga();
         bloqueados.encolar(p);
+        registrar(p.getNombre() + " se bloquea por E/S durante " + p.getCiclosIo() + " ciclos.");
     }
 
     /**
@@ -252,6 +274,9 @@ public class Kernel {
                     p.setFaseProdCons(1);
                     boolean remoto = buffer.getIdComputadorAnfitrion() != cpu.getIdComputador();
                     if (remoto && servicio.getLatenciaRed() > 0) {
+                        registrar(p.getNombre() + " accede al buffer remoto " + buffer.getId() + " (computador "
+                                + buffer.getIdComputadorAnfitrion() + "): espera "
+                                + servicio.getLatenciaRed() + " ciclos de latencia de red.");
                         p.setEstado(EstadoProceso.BLOQUEADO);
                         p.setMotivoBloqueo(MotivoBloqueo.LATENCIA_RED);
                         p.setCiclosEsperaRestantes(servicio.getLatenciaRed());
@@ -272,14 +297,17 @@ public class Kernel {
                 } else {
                     buffer.extraer();
                 }
+                registrar(p.getNombre() + (productor ? " inserta en el buffer " : " extrae del buffer ")
+                        + buffer.getId() + " (elementos: " + buffer.getCantidadElementos() + "/"
+                        + buffer.getCapacidad() + ").");
                 p.setFaseProdCons(4);
                 return true;
             case 4:
-                despertarProceso(buffer.getMutex().semSignal());
+                senalar(buffer.getMutex(), p);
                 p.setFaseProdCons(5);
                 return true;
             default:
-                despertarProceso(segundo.semSignal());
+                senalar(segundo, p);
                 p.incrementarElementos();
                 p.setFaseProdCons(0);
                 return true;
@@ -302,9 +330,29 @@ public class Kernel {
             bloqueados.quitar(p);
             p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
             p.setEstado(EstadoProceso.EJECUCION);
+            registrar(p.getNombre() + " semWait(" + semaforo.getNombre() + "): pasa (valor "
+                    + semaforo.getValor() + ").");
             return true;
         }
+        registrar(p.getNombre() + " semWait(" + semaforo.getNombre() + "): se bloquea (valor "
+                + semaforo.getValor() + ").");
         return false;
+    }
+
+    /**
+     * semSignal del proceso: lo anota en el log y, si había alguien esperando
+     * en ese semáforo, lo despierta.
+     */
+    private void senalar(Semaforo semaforo, Proceso quien) {
+        Proceso despertado = semaforo.semSignal();
+        if (despertado != null) {
+            registrar(quien.getNombre() + " semSignal(" + semaforo.getNombre() + "): despierta a "
+                    + despertado.getNombre() + ".");
+        } else {
+            registrar(quien.getNombre() + " semSignal(" + semaforo.getNombre() + "): valor "
+                    + semaforo.getValor() + ".");
+        }
+        despertarProceso(despertado);
     }
 
     private void despertarProceso(Proceso despertado) {
@@ -338,23 +386,23 @@ public class Kernel {
         if (motivo == MotivoBloqueo.SEM_MUTEX) {
             // esperaba el mutex, pero ya tenía el permiso del primer semáforo
             buffer.getMutex().cancelarEspera(p);
-            despertarProceso(primero.semSignal());
+            senalar(primero, p);
             return;
         }
         switch (p.getFaseProdCons()) {
             case 2:
-                despertarProceso(primero.semSignal());
+                senalar(primero, p);
                 break;
             case 3:
-                despertarProceso(buffer.getMutex().semSignal());
-                despertarProceso(primero.semSignal());
+                senalar(buffer.getMutex(), p);
+                senalar(primero, p);
                 break;
             case 4:
-                despertarProceso(buffer.getMutex().semSignal());
-                despertarProceso(segundo.semSignal());
+                senalar(buffer.getMutex(), p);
+                senalar(segundo, p);
                 break;
             case 5:
-                despertarProceso(segundo.semSignal());
+                senalar(segundo, p);
                 break;
             default:
                 break;
@@ -375,6 +423,15 @@ public class Kernel {
         proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
         proceso.setCicloFinalizacion(ciclo);
         terminados.encolar(proceso);
+        if (proceso.getTiempoRestante() <= 0) {
+            registrar(proceso.getNombre() + " termina (libera " + proceso.getMemoriaRAM() + " de RAM).");
+        } else if (proceso.getDeadline() == 0) {
+            registrar(proceso.getNombre() + " pierde su deadline (le faltaban "
+                    + proceso.getTiempoRestante() + " instrucciones).");
+        } else {
+            registrar(proceso.getNombre() + " termina sin completarse (le faltaban "
+                    + proceso.getTiempoRestante() + " instrucciones).");
+        }
     }
 
     /**
@@ -388,6 +445,8 @@ public class Kernel {
             enCpu.setEstado(EstadoProceso.LISTO);
             listos.encolar(enCpu);
             ciclosEnCpu = 0;
+            registrar(enCpu.getNombre() + " expropiado por la política " + actual.getTipo()
+                    + " y vuelve a listos.");
         }
     }
 
@@ -406,6 +465,7 @@ public class Kernel {
         if (cpu.asignar(siguiente)) {
             siguiente.setEstado(EstadoProceso.EJECUCION);
             ciclosEnCpu = 0;
+            registrar(actual.getTipo() + " elige a " + siguiente.getNombre() + " para la CPU.");
             if (siguiente.getCicloPrimeraEjecucion() < 0) {
                 siguiente.setCicloPrimeraEjecucion(ciclo);
             }

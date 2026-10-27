@@ -8,6 +8,7 @@ import reloj.RelojGlobal;
 import kernel.ServicioSistema;
 import hardware.Cpu;
 import kernel.Kernel;
+import util.LogEventos;
 
 /**
  * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster y el
@@ -24,6 +25,8 @@ public class SistemaDistribuido implements ServicioSistema {
     private int cantidadBuffers;
     private volatile int latenciaRed;
     private final RelojGlobal reloj;
+    // volatile: la interfaz lo conecta y lo leen los hilos de los computadores
+    private volatile LogEventos log;
 
     /**
      * @param latenciaRed ciclos extra que cuesta cada acceso a un buffer remoto
@@ -230,7 +233,18 @@ public class SistemaDistribuido implements ServicioSistema {
     public int getCantidadComputadores() {
         return cantidadComputadores;
     }
+        /** Conecta el log de eventos. Puede ser null (sin log). */
+    public void setLogEventos(LogEventos log) {
+        this.log = log;
+    }
 
+    @Override
+    public void registrarEvento(long ciclo, String descripcion) {
+        LogEventos actual = log;
+        if (actual != null) {
+            actual.registrar(ciclo, descripcion);
+        }
+    }
     @Override
     public int getLatenciaRed() {
         return latenciaRed;

@@ -307,6 +307,7 @@ public class VistaCreacion extends JFrame {
             RelojGlobal reloj = new RelojGlobal(d.duracionCiclo);
             SistemaDistribuido sistema = new SistemaDistribuido(d.latencia, reloj);
             LogEventos log = new LogEventos(5000);
+            sistema.setLogEventos(log);
 
             for (int i = 0; i < d.ramComputadores.length; i++) {
                 sistema.agregarComputador(d.ramComputadores[i],
