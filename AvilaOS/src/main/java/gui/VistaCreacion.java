@@ -5,11 +5,14 @@ import reloj.RelojGlobal;
 import sincronizacion.ColaProcesos;
 import sistema.SistemaDistribuido;
 import util.GestorArchivo;
+import util.GestorEscenario;
 import util.LogEventos;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.io.File;
+import java.io.IOException;
 
 /**
  * Vista 1: configuración inicial del sistema (parámetros globales, computadores
@@ -83,13 +86,19 @@ public class VistaCreacion extends JFrame {
         add(pestanas, BorderLayout.CENTER);
 
         JPanel panelAcciones = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton btnGuardarCSV = new JButton("Guardar procesos en CSV");
+        JButton btnCargarEscenario = new JButton("Cargar escenario (CSV)");
+        btnCargarEscenario.addActionListener(e -> cargarEscenario());
+        JButton btnGuardarEscenario = new JButton("Guardar escenario (CSV)");
+        btnGuardarEscenario.addActionListener(e -> guardarEscenario());
+        JButton btnGuardarCSV = new JButton("Guardar solo procesos (CSV)");
         btnGuardarCSV.addActionListener(e -> guardarProcesosCSV());
         JButton btnIniciar = new JButton("Iniciar simulación");
         btnIniciar.setFont(new Font("SansSerif", Font.BOLD, 14));
         btnIniciar.setBackground(new Color(40, 167, 69));
         btnIniciar.setForeground(Color.WHITE);
         btnIniciar.addActionListener(e -> iniciarSimulacion());
+        panelAcciones.add(btnCargarEscenario);
+        panelAcciones.add(btnGuardarEscenario);
         panelAcciones.add(btnGuardarCSV);
         panelAcciones.add(btnIniciar);
         add(panelAcciones, BorderLayout.SOUTH);
@@ -233,6 +242,16 @@ public class VistaCreacion extends JFrame {
             d.ramComputadores[i] = FabricaSistema.entero("RAM del computador " + (i + 1),
                     modeloComputadores.getValueAt(i, 1), 1, 1000000);
             d.politicas[i] = String.valueOf(modeloComputadores.getValueAt(i, 2));
+            boolean conocida = false;
+            for (int j = 0; j < FabricaSistema.POLITICAS.length; j++) {
+                if (FabricaSistema.POLITICAS[j].equals(d.politicas[i])) {
+                    conocida = true;
+                }
+            }
+            if (!conocida) {
+                throw new IllegalArgumentException("La política del computador " + (i + 1) + " (\""
+                        + d.politicas[i] + "\") no existe. Use: Round Robin, FCFS, EDF o Prioridades.");
+            }
         }
 
         int numBuf = modeloBuffers.getRowCount();
@@ -276,6 +295,113 @@ public class VistaCreacion extends JFrame {
         return (v == null) ? "" : v.toString();
     }
 
+    // ------------------------------------------------------------ escenario CSV
+    private String[][] volcarTabla(DefaultTableModel modelo, int columnas, boolean numerarPrimera) {
+        String[][] filas = new String[modelo.getRowCount()][columnas];
+        for (int i = 0; i < filas.length; i++) {
+            for (int j = 0; j < columnas; j++) {
+                Object v = modelo.getValueAt(i, j);
+                filas[i][j] = (v == null) ? "" : v.toString().trim();
+            }
+            if (numerarPrimera) {
+                filas[i][0] = String.valueOf(i + 1);
+            }
+        }
+        return filas;
+    }
+
+    /**
+     * Guarda en un CSV toda la configuración de la pantalla (globales,
+     * computadores, buffers y procesos). Solo guarda configuraciones válidas.
+     */
+    private void guardarEscenario() {
+        try {
+            leerYValidar();
+            JFileChooser selector = new JFileChooser(new File("."));
+            selector.setDialogTitle("Guardar escenario");
+            selector.setSelectedFile(new File("escenario.csv"));
+            if (selector.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+                return;
+            }
+            File archivo = selector.getSelectedFile();
+            if (!archivo.getName().toLowerCase().endsWith(".csv")) {
+                archivo = new File(archivo.getPath() + ".csv");
+            }
+            if (archivo.exists() && JOptionPane.showConfirmDialog(this,
+                    "El archivo " + archivo.getName() + " ya existe. ¿Reemplazarlo?", "Guardar escenario",
+                    JOptionPane.YES_NO_OPTION) != JOptionPane.YES_OPTION) {
+                return;
+            }
+            String[] globales = {txtDuracionCiclo.getText().trim(), txtQuantum.getText().trim(),
+                txtLatencia.getText().trim()};
+            GestorEscenario.guardar(archivo.getPath(), globales,
+                    volcarTabla(modeloComputadores, 3, true),
+                    volcarTabla(modeloBuffers, 3, false),
+                    volcarTabla(modeloProcesos, 12, false));
+            JOptionPane.showMessageDialog(this, "Escenario guardado en " + archivo.getName() + ".",
+                    "CSV", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Datos inválidos", JOptionPane.ERROR_MESSAGE);
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "No se pudo guardar el CSV: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /**
+     * Carga un escenario desde un CSV y rellena la pantalla. Si el formato del
+     * archivo es incorrecto no se cambia nada; si el formato es correcto pero
+     * algún dato no cumple los rangos, se carga igual y se avisa para que el
+     * usuario lo corrija.
+     */
+    private void cargarEscenario() {
+        detenerEdicion();
+        JFileChooser selector = new JFileChooser(new File("."));
+        selector.setDialogTitle("Cargar escenario");
+        if (selector.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        GestorEscenario.Escenario escenario;
+        try {
+            escenario = GestorEscenario.cargar(selector.getSelectedFile().getPath());
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Archivo inválido", JOptionPane.ERROR_MESSAGE);
+            return;
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this, "No se pudo leer el CSV: " + ex.getMessage(),
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        txtDuracionCiclo.setText(escenario.globales[0]);
+        txtQuantum.setText(escenario.globales[1]);
+        txtLatencia.setText(escenario.globales[2]);
+
+        modeloComputadores.setRowCount(0);
+        for (int i = 0; i < escenario.computadores.length; i++) {
+            modeloComputadores.addRow(new Object[]{"PC " + (i + 1), escenario.computadores[i][1],
+                escenario.computadores[i][2]});
+        }
+        modeloBuffers.setRowCount(0);
+        for (int i = 0; i < escenario.buffers.length; i++) {
+            modeloBuffers.addRow((Object[]) escenario.buffers[i]);
+        }
+        modeloProcesos.setRowCount(0);
+        for (int i = 0; i < escenario.procesos.length; i++) {
+            modeloProcesos.addRow((Object[]) escenario.procesos[i]);
+        }
+
+        try {
+            leerYValidar();
+            JOptionPane.showMessageDialog(this, "Escenario cargado: " + escenario.computadores.length
+                    + " computadores, " + escenario.buffers.length + " buffers y " + escenario.procesos.length
+                    + " procesos.", "CSV", JOptionPane.INFORMATION_MESSAGE);
+        } catch (IllegalArgumentException ex) {
+            JOptionPane.showMessageDialog(this, "El archivo se cargó, pero hay datos que corregir:\n"
+                    + ex.getMessage(), "Datos inválidos", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
     private void guardarProcesosCSV() {
         try {
             Datos d = leerYValidar();
@@ -307,7 +433,6 @@ public class VistaCreacion extends JFrame {
             RelojGlobal reloj = new RelojGlobal(d.duracionCiclo);
             SistemaDistribuido sistema = new SistemaDistribuido(d.latencia, reloj);
             LogEventos log = new LogEventos(5000);
-            sistema.setLogEventos(log);
 
             for (int i = 0; i < d.ramComputadores.length; i++) {
                 sistema.agregarComputador(d.ramComputadores[i],
