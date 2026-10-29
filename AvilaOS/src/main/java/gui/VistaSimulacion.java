@@ -3,6 +3,7 @@ package gui;
 import computador.Computador;
 import hardware.Cpu;
 import kernel.Kernel;
+import metricas.Metricas;
 import modelo.Proceso;
 import modelo.enums.MotivoBloqueo;
 import planificacion.PoliticaEDF;
@@ -37,7 +38,12 @@ import org.jfree.data.xy.XYSeriesCollection;
 public class VistaSimulacion extends JFrame {
 
     private static final String[] NOMBRES_POLITICAS = {"Round Robin", "FCFS", "EDF", "Prioridades"};
-    private static final String[] COLUMNAS_PROCESOS = {"Proceso", "Tipo", "Estado", "PC", "MAR", "Restan", "Deadline"};
+    private static final String[] COLUMNAS_PROCESOS = {"ID", "Proceso", "Tipo", "Estado", "Prioridad", "PC", "MAR",
+        "Restan", "Deadline"};
+    private static final String[] COLUMNAS_METRICAS = {"", "Utilización", "Throughput", "Respuesta prom.",
+        "Cumplimiento", "Equidad (Jain)", "Terminados"};
+    private static final String[] COLUMNAS_METRICAS_BUFFERS = {"Buffer", "Elementos producidos",
+        "Elementos consumidos"};
     private static final String[] COLUMNAS_BUFFERS = {"Buffer", "Anfitrión", "Capacidad", "Elementos",
         "mutex", "llenos", "vacíos", "Procesos en espera"};
     private static final int PUNTOS_GRAFICA = 150;
@@ -59,6 +65,11 @@ public class VistaSimulacion extends JFrame {
 
     // Buffers
     private final DefaultTableModel modeloBuffers = new DefaultTableModel(COLUMNAS_BUFFERS, 0);
+
+    // Métricas
+    private final DefaultTableModel modeloMetricas = new DefaultTableModel(COLUMNAS_METRICAS, 0);
+    private final DefaultTableModel modeloMetricasBuffers = new DefaultTableModel(COLUMNAS_METRICAS_BUFFERS, 0);
+    private final JLabel lblBloqueoSemaforos = new JLabel(" ");
 
     // Log
     private final JTextArea txtLogs = new JTextArea();
@@ -135,6 +146,23 @@ public class VistaSimulacion extends JFrame {
         add(panel, BorderLayout.NORTH);
     }
 
+    private JPanel construirPanelMetricas() {
+        JScrollPane scrollSistema = new JScrollPane(new JTable(modeloMetricas));
+        scrollSistema.setBorder(BorderFactory.createTitledBorder(
+                "Por computador y del sistema completo (throughput en procesos por ciclo; respuesta en ciclos; cumplimiento de deadlines)"));
+        JScrollPane scrollBuffers = new JScrollPane(new JTable(modeloMetricasBuffers));
+        scrollBuffers.setBorder(BorderFactory.createTitledBorder("Productor-consumidor por buffer"));
+
+        JPanel abajo = new JPanel(new BorderLayout());
+        abajo.add(scrollBuffers, BorderLayout.CENTER);
+        abajo.add(lblBloqueoSemaforos, BorderLayout.SOUTH);
+
+        JPanel panel = new JPanel(new GridLayout(2, 1, 5, 5));
+        panel.add(scrollSistema);
+        panel.add(abajo);
+        return panel;
+    }
+
     private void construirCentro() {
         JTabbedPane pestanas = new JTabbedPane();
 
@@ -148,11 +176,10 @@ public class VistaSimulacion extends JFrame {
 
         JTable tablaBuffers = new JTable(modeloBuffers);
         pestanas.addTab("Buffers y semáforos", new JScrollPane(tablaBuffers));
+        pestanas.addTab("Métricas", construirPanelMetricas());
 
         txtLogs.setEditable(false);
         txtLogs.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-        txtLogs.setLineWrap(true);
-        txtLogs.setWrapStyleWord(true);
         JScrollPane scrollLogs = new JScrollPane(txtLogs);
         scrollLogs.setBorder(BorderFactory.createTitledBorder("Log de eventos"));
 
@@ -407,6 +434,56 @@ public class VistaSimulacion extends JFrame {
             actualizarSerie(i, ciclo);
         }
         actualizarBuffers();
+        actualizarMetricas(ciclo);
+    }
+
+    private static String formato(double valor, String patron) {
+        if (Double.isNaN(valor) || Double.isInfinite(valor)) {
+            return "-";
+        }
+        return String.format(patron, valor);
+    }
+
+    /**
+     * Métricas calculadas por la clase Metricas con los datos reales del
+     * sistema: por computador (su CPU y sus procesos terminados) y del sistema
+     * completo.
+     */
+    private void actualizarMetricas(long ciclo) {
+        modeloMetricas.setRowCount(0);
+        for (int i = 0; i < paneles.length; i++) {
+            Proceso[] terminados = paneles[i].getTerminados();
+            modeloMetricas.addRow(filaMetricas("Computador " + paneles[i].getIdComputador(),
+                    Metricas.utilizacion(paneles[i].getCpu()), terminados, ciclo));
+        }
+        modeloMetricas.addRow(filaMetricas("Sistema completo",
+                Metricas.utilizacionSistema(sistema.getCpus()), sistema.getProcesosTerminados(), ciclo));
+
+        Proceso[] todos = sistema.getTodosLosProcesos();
+        modeloMetricasBuffers.setRowCount(0);
+        for (int i = 0; i < sistema.getCantidadBuffers(); i++) {
+            String id = String.valueOf(sistema.getBufferEn(i).getId());
+            modeloMetricasBuffers.addRow(new Object[]{
+                id,
+                String.valueOf(Metricas.elementosProducidos(todos, id)),
+                String.valueOf(Metricas.elementosConsumidos(todos, id))
+            });
+        }
+        lblBloqueoSemaforos.setText("  Tiempo promedio que los procesos pasan bloqueados en semáforos: "
+                + formato(Metricas.tiempoPromedioBloqueoSemaforos(todos), "%.2f") + " ciclos");
+    }
+
+    private Object[] filaMetricas(String nombre, double utilizacion, Proceso[] terminados, long ciclo) {
+        boolean hay = terminados.length > 0;
+        return new Object[]{
+            nombre,
+            formato(utilizacion * 100.0, "%.1f %%"),
+            formato(Metricas.throughput(terminados, ciclo), "%.3f"),
+            hay ? formato(Metricas.tiempoRespuestaPromedio(terminados), "%.2f") : "-",
+            hay ? formato(Metricas.cumplimientoDeadlines(terminados) * 100.0, "%.1f %%") : "-",
+            hay ? formato(Metricas.equidad(terminados), "%.3f") : "-",
+            terminados.length
+        };
     }
 
     /**
@@ -485,9 +562,11 @@ public class VistaSimulacion extends JFrame {
                 estado = estado + " (" + p.getMotivoBloqueo() + ")";
             }
             modelo.addRow(new Object[]{
+                p.getId(),
                 p.getNombre(),
                 p.getTipo(),
                 estado,
+                p.getPrioridad(),
                 p.getPc(),
                 p.getMar(),
                 p.getTiempoRestante(),
@@ -580,6 +659,10 @@ public class VistaSimulacion extends JFrame {
             return computador.getCpu();
         }
 
+        Proceso[] getTerminados() {
+            return computador.getKernel().obtenerTerminados();
+        }
+
         private void cambiarPolitica() {
             int indice = comboPolitica.getSelectedIndex();
             int quantum;
@@ -639,7 +722,8 @@ public class VistaSimulacion extends JFrame {
             Proceso enCpu = cpu.getProcesoActual();
             String detalle = (enCpu == null)
                     ? "libre"
-                    : enCpu.getNombre() + "  PC=" + cpu.getPc() + "  MAR=" + cpu.getMar();
+                    : enCpu.getNombre() + " (prioridad " + enCpu.getPrioridad() + ", deadline " + enCpu.getDeadline()
+                    + ")  PC=" + cpu.getPc() + "  MAR=" + cpu.getMar();
             lblCpu.setText("CPU: modo " + cpu.getModo() + "  |  proceso en CPU: " + detalle);
 
             lblMemoria.setText("RAM: " + kernel.getMemoria().getUsada() + " / "
