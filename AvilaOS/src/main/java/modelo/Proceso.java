@@ -33,6 +33,8 @@ public class Proceso {
     private long cicloPrimeraEjecucion = -1;
     private long cicloFinalizacion = -1;
     private int ciclosBloqueado;
+    // ciclos que el proceso pasa esperando en la cola de listos (tiempo de espera)
+    private int ciclosEspera;
 
     // --- Esperas con duración fija (E/S, latencia de red) ---
     private int ciclosEsperaRestantes;
@@ -228,6 +230,17 @@ public class Proceso {
      */
     public void incrementarCiclosBloqueado() {
         ciclosBloqueado++;
+    }
+
+    public int getCiclosEspera() {
+        return ciclosEspera;
+    }
+
+    /**
+     * Suma un ciclo al tiempo que el proceso lleva esperando en listos.
+     */
+    public void incrementarCiclosEspera() {
+        ciclosEspera++;
     }
     // --- Espera con duración fija y ráfagas de CPU ---
 
