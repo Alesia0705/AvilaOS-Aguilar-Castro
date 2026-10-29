@@ -121,6 +121,7 @@ public class Kernel {
         revisarProcesoEnCpu(ciclo);
         expropiarSiCorresponde(actual);
         asignarCpuSiLibre(actual, ciclo);
+        acumularEspera();
 
         // Si hay un proceso en la CPU, este ciclo lo va a ejecutar
         Proceso enCpu = cpu.getProcesoActual();
@@ -132,6 +133,17 @@ public class Kernel {
                 cpu.setModo(enCpu.estaEnProtocolo()
                         ? ModoCpu.SISTEMA_OPERATIVO : ModoCpu.USUARIO);
             }
+        }
+    }
+
+    /**
+     * Los procesos que siguen en listos después de decidir la CPU esperaron
+     * este ciclo (se usa para el tiempo de espera).
+     */
+    private void acumularEspera() {
+        Proceso[] enListos = listos.obtenerListaProcesos();
+        for (int i = 0; i < enListos.length; i++) {
+            enListos[i].incrementarCiclosEspera();
         }
     }
 

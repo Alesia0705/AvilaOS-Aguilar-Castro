@@ -87,6 +87,21 @@ public class Metricas {
     }
 
     /**
+     * Promedio de ciclos que los procesos pasaron esperando en la cola de
+     * listos (0.0 si no hay datos).
+     */
+    public static double tiempoEsperaPromedio(Proceso[] procesos) {
+        if (procesos.length == 0) {
+            return 0.0;
+        }
+        long suma = 0;
+        for (int i = 0; i < procesos.length; i++) {
+            suma = suma + procesos[i].getCiclosEspera();
+        }
+        return (double) suma / procesos.length;
+    }
+
+    /**
      * Fracción de procesos terminados que cumplieron su deadline (0.0 si no hay
      * datos).
      */
