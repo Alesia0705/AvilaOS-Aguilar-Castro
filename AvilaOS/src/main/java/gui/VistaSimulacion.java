@@ -41,7 +41,7 @@ public class VistaSimulacion extends JFrame {
     private static final String[] COLUMNAS_PROCESOS = {"ID", "Proceso", "Tipo", "Estado", "Prioridad", "PC", "MAR",
         "Restan", "Deadline"};
     private static final String[] COLUMNAS_METRICAS = {"", "Utilización", "Throughput", "Respuesta prom.",
-        "Cumplimiento", "Equidad (Jain)", "Terminados"};
+        "Espera prom.", "Cumplimiento", "Equidad (Jain)", "Terminados"};
     private static final String[] COLUMNAS_METRICAS_BUFFERS = {"Buffer", "Elementos producidos",
         "Elementos consumidos"};
     private static final String[] COLUMNAS_BUFFERS = {"Buffer", "Anfitrión", "Capacidad", "Elementos",
@@ -76,6 +76,10 @@ public class VistaSimulacion extends JFrame {
 
     // Gráfica: una serie por computador
     private XYSeries[] series;
+    // Gráficas de rendimiento del sistema completo
+    private final XYSeries serieThroughput = new XYSeries("Throughput");
+    private final XYSeries serieExito = new XYSeries("Tasa de éxito");
+    private final XYSeries serieEspera = new XYSeries("Tiempo de espera");
     private long[] ocupadosPrevios;
     private long[] totalesPrevios;
 
@@ -149,7 +153,7 @@ public class VistaSimulacion extends JFrame {
     private JPanel construirPanelMetricas() {
         JScrollPane scrollSistema = new JScrollPane(new JTable(modeloMetricas));
         scrollSistema.setBorder(BorderFactory.createTitledBorder(
-                "Por computador y del sistema completo (throughput en procesos por ciclo; respuesta en ciclos; cumplimiento de deadlines)"));
+                "Por computador y del sistema completo (throughput en procesos por ciclo; respuesta y espera en ciclos; cumplimiento de deadlines)"));
         JScrollPane scrollBuffers = new JScrollPane(new JTable(modeloMetricasBuffers));
         scrollBuffers.setBorder(BorderFactory.createTitledBorder("Productor-consumidor por buffer"));
 
@@ -225,9 +229,31 @@ public class VistaSimulacion extends JFrame {
                 true, true, false);
         grafica.getXYPlot().getRangeAxis().setRange(0.0, 100.0);
 
-        ChartPanel panelGrafica = new ChartPanel(grafica);
-        panelGrafica.setPreferredSize(new Dimension(1100, 200));
-        add(panelGrafica, BorderLayout.SOUTH);
+        ChartPanel panelUtilizacion = new ChartPanel(grafica);
+
+        JPanel panelRendimiento = new JPanel(new GridLayout(1, 3));
+        panelRendimiento.add(crearGraficaSerie(serieThroughput, "Throughput del sistema",
+                "Procesos por ciclo", false));
+        panelRendimiento.add(crearGraficaSerie(serieExito, "Tasa de éxito (deadlines cumplidos)",
+                "Cumplimiento (%)", true));
+        panelRendimiento.add(crearGraficaSerie(serieEspera, "Tiempo de espera promedio",
+                "Ciclos en cola de listos", false));
+
+        JTabbedPane pestanasGraficas = new JTabbedPane();
+        pestanasGraficas.addTab("Utilización de CPU", panelUtilizacion);
+        pestanasGraficas.addTab("Throughput, tasa de éxito y espera", panelRendimiento);
+        pestanasGraficas.setPreferredSize(new Dimension(1100, 230));
+        add(pestanasGraficas, BorderLayout.SOUTH);
+    }
+
+    private ChartPanel crearGraficaSerie(XYSeries serie, String titulo, String ejeY, boolean porcentaje) {
+        serie.setMaximumItemCount(PUNTOS_GRAFICA);
+        JFreeChart g = ChartFactory.createXYLineChart(titulo, "Ciclo de reloj", ejeY,
+                new XYSeriesCollection(serie), PlotOrientation.VERTICAL, false, true, false);
+        if (porcentaje) {
+            g.getXYPlot().getRangeAxis().setRange(0.0, 100.0);
+        }
+        return new ChartPanel(g);
     }
 
     // ------------------------------------------------------------------
@@ -460,6 +486,14 @@ public class VistaSimulacion extends JFrame {
                 Metricas.utilizacionSistema(sistema.getCpus()), sistema.getProcesosTerminados(), ciclo));
 
         Proceso[] todos = sistema.getTodosLosProcesos();
+        // Gráficas del sistema completo (sobre los procesos terminados)
+        Proceso[] terminadosSistema = sistema.getProcesosTerminados();
+        serieThroughput.add((double) ciclo, Metricas.throughput(terminadosSistema, ciclo));
+        if (terminadosSistema.length > 0) {
+            serieExito.add((double) ciclo, Metricas.cumplimientoDeadlines(terminadosSistema) * 100.0);
+            serieEspera.add((double) ciclo, Metricas.tiempoEsperaPromedio(terminadosSistema));
+        }
+
         modeloMetricasBuffers.setRowCount(0);
         for (int i = 0; i < sistema.getCantidadBuffers(); i++) {
             String id = String.valueOf(sistema.getBufferEn(i).getId());
@@ -480,6 +514,7 @@ public class VistaSimulacion extends JFrame {
             formato(utilizacion * 100.0, "%.1f %%"),
             formato(Metricas.throughput(terminados, ciclo), "%.3f"),
             hay ? formato(Metricas.tiempoRespuestaPromedio(terminados), "%.2f") : "-",
+            hay ? formato(Metricas.tiempoEsperaPromedio(terminados), "%.2f") : "-",
             hay ? formato(Metricas.cumplimientoDeadlines(terminados) * 100.0, "%.1f %%") : "-",
             hay ? formato(Metricas.equidad(terminados), "%.3f") : "-",
             terminados.length
