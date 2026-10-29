@@ -229,7 +229,7 @@ public class VistaSimulacion extends JFrame {
                 datos,
                 PlotOrientation.VERTICAL,
                 true, true, false);
-        grafica.getXYPlot().getRangeAxis().setRange(0.0, 100.0);
+        grafica.getXYPlot().getRangeAxis().setRange(0.0, 105.0);
 
         ChartPanel panelUtilizacion = new ChartPanel(grafica);
 
@@ -253,7 +253,7 @@ public class VistaSimulacion extends JFrame {
         JFreeChart g = ChartFactory.createXYLineChart(titulo, "Ciclo de reloj", ejeY,
                 new XYSeriesCollection(serie), PlotOrientation.VERTICAL, false, true, false);
         if (porcentaje) {
-            g.getXYPlot().getRangeAxis().setRange(0.0, 100.0);
+            g.getXYPlot().getRangeAxis().setRange(0.0, 105.0);
         }
         return new ChartPanel(g);
     }
