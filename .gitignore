@@ -29,3 +29,13 @@ configuracion.csv
 
 # Configuración privada de NetBeans
 nbproject/private/
+
+   # Maven
+   target/
+
+   # NetBeans
+   nbproject/private/
+   build/
+   dist/
+   nbbuild/
+   nbdist/
