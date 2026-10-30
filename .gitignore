@@ -22,3 +22,20 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+/AvilaOS/target/
+
+# Archivo de configuración generado por la aplicación
+configuracion.csv
+
+# Configuración privada de NetBeans
+nbproject/private/
+
+   # Maven
+   target/
+
+   # NetBeans
+   nbproject/private/
+   build/
+   dist/
+   nbbuild/
+   nbdist/

@@ -1,0 +1,159 @@
+package sincronizacion;
+
+import java.util.concurrent.Semaphore;
+import modelo.Proceso;
+import util.ListaEnlazada;
+
+/**
+ * Cola de procesos compartida entre hilos. Guarda los procesos en una
+ * ListaEnlazada propia y la protege con un Semaphore(1) usado como mutex.
+ *
+ * @author Alesia Castro
+ */
+public class ColaProcesos {
+
+    private final ListaEnlazada<Proceso> lista;
+    private final Semaphore mutex;
+
+    public ColaProcesos() {
+        this.lista = new ListaEnlazada<>();
+        this.mutex = new Semaphore(1);
+    }
+
+    /**
+     * Agrega un proceso al final de la cola.
+     */
+    public void encolar(Proceso proceso) {
+        try {
+            mutex.acquire();
+            try {
+                lista.agregarAlFinal(proceso);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Saca y devuelve el primer proceso de la cola, o null si está vacía.
+     */
+    public Proceso desencolar() {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.quitarPrimero();
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
+    }
+
+    /**
+     * Devuelve el primer proceso sin sacarlo de la cola, o null si está vacía.
+     */
+    public Proceso obtenerPrimero() {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.obtener(0);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
+    }
+
+    /**
+     * Devuelve el proceso de la posición indicada sin sacarlo de la cola. La
+     * posición 0 es el primero. Devuelve null si la posición no es válida.
+     */
+    public Proceso obtener(int indice) {
+        Proceso resultado = null;
+        try {
+            mutex.acquire();
+            try {
+                resultado = lista.obtener(indice);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return resultado;
+    }
+
+    /**
+     * Saca de la cola el proceso indicado, esté en la posición que esté.
+     * Devuelve true si lo encontró y false si no estaba.
+     */
+    public boolean quitar(Proceso proceso) {
+        boolean quitado = false;
+        try {
+            mutex.acquire();
+            try {
+                quitado = lista.quitar(proceso);
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return quitado;
+    }
+
+    /**
+     * Devuelve cuántos procesos hay en la cola.
+     */
+    public int getTamano() {
+        int tamano = 0;
+        try {
+            mutex.acquire();
+            try {
+                tamano = lista.getTamano();
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return tamano;
+    }
+
+    /**
+     * Indica si la cola no tiene procesos.
+     */
+    public boolean estaVacia() {
+        return getTamano() == 0;
+    }
+
+    /**
+     * Devuelve una copia de los procesos de la cola, en orden, como arreglo. Es
+     * una foto del momento: si la cola cambia después, el arreglo no cambia.
+     */
+    public Proceso[] obtenerListaProcesos() {
+        Proceso[] copia = new Proceso[0];
+        try {
+            mutex.acquire();
+            try {
+                copia = new Proceso[lista.getTamano()];
+                for (int i = 0; i < copia.length; i++) {
+                    copia[i] = lista.obtener(i);
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return copia;
+    }
+}

@@ -1,0 +1,270 @@
+package hardware;
+
+import java.util.concurrent.Semaphore;
+import modelo.Proceso;
+import modelo.enums.ModoCpu;
+import reloj.EscuchaReloj;
+
+/**
+ * Procesador de un computador. Ejecuta una instrucción por ciclo del proceso
+ * que el kernel le asigna y cuenta los ciclos que pasa en cada modo (usuario,
+ * sistema operativo, ocioso) para calcular su utilización. No decide qué
+ * proceso corre: eso es trabajo del kernel.
+ *
+ * @author Alesia Castro
+ */
+public class Cpu implements EscuchaReloj {
+
+    private final int idComputador;
+    private Proceso procesoActual;
+    private ModoCpu modo;
+
+    private int ciclosUsuario;
+    private int ciclosSistema;
+    private int ciclosOcioso;
+
+    private final Semaphore mutex;
+
+    public Cpu(int idComputador) {
+        this.idComputador = idComputador;
+        this.procesoActual = null;
+        this.modo = ModoCpu.OCIOSO;
+        this.ciclosUsuario = 0;
+        this.ciclosSistema = 0;
+        this.ciclosOcioso = 0;
+        this.mutex = new Semaphore(1);
+    }
+
+    /**
+     * Pone un proceso en la CPU y la deja en modo usuario. Si la CPU ya tiene
+     * un proceso, no hace nada y devuelve false.
+     */
+    public boolean asignar(Proceso proceso) {
+        boolean asignado = false;
+        try {
+            mutex.acquire();
+            try {
+                if (procesoActual == null && proceso != null) {
+                    procesoActual = proceso;
+                    modo = ModoCpu.USUARIO;
+                    asignado = true;
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return asignado;
+    }
+
+    /**
+     * Saca de la CPU el proceso que tenía y lo devuelve (null si estaba libre).
+     * La CPU queda ociosa.
+     */
+    public Proceso retirar() {
+        Proceso retirado = null;
+        try {
+            mutex.acquire();
+            try {
+                retirado = procesoActual;
+                procesoActual = null;
+                modo = ModoCpu.OCIOSO;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return retirado;
+    }
+
+    /**
+     * Avanza un ciclo de reloj. En modo usuario ejecuta una instrucción del
+     * proceso actual y cuenta un ciclo de usuario. En modo sistema operativo
+     * también ejecuta la instrucción del proceso (si tiene), pero cuenta un
+     * ciclo de sistema. Sin proceso, el ciclo es ocioso. No decide nada: si el
+     * proceso termina, el kernel se da cuenta y lo retira.
+     */
+    public void ejecutarCiclo() {
+        try {
+            mutex.acquire();
+            try {
+                if (modo == ModoCpu.SISTEMA_OPERATIVO) {
+                    // Las operaciones del SO (semWait, semSignal, insertar, extraer)
+                    // también son una instrucción del proceso: avanzan pc, mar y
+                    // tiempoRestante, pero se cuentan como ciclo de sistema.
+                    if (procesoActual != null && procesoActual.getTiempoRestante() > 0) {
+                        procesoActual.ejecutarInstruccion();
+                    }
+                    ciclosSistema++;
+                } else if (procesoActual != null && procesoActual.getTiempoRestante() > 0) {
+                    procesoActual.ejecutarInstruccion();
+                    ciclosUsuario++;
+                } else {
+                    ciclosOcioso++;
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * El reloj global avisa en cada ciclo: la CPU ejecuta un ciclo.
+     */
+    @Override
+    public void onTick(long ciclo) {
+        ejecutarCiclo();
+    }
+
+    /**
+     * Cambia el modo de la CPU. Lo usa el kernel: SISTEMA_OPERATIVO mientras
+     * hace su trabajo (planificar, cambiar de proceso) y USUARIO al volver a
+     * correr un proceso.
+     */
+    public void setModo(ModoCpu nuevoModo) {
+        try {
+            mutex.acquire();
+            try {
+                modo = nuevoModo;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    public int getIdComputador() {
+        return idComputador;
+    }
+
+    public ModoCpu getModo() {
+        ModoCpu valor = ModoCpu.OCIOSO;
+        try {
+            mutex.acquire();
+            try {
+                valor = modo;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Proceso que está en la CPU, o null si está libre.
+     */
+    public Proceso getProcesoActual() {
+        Proceso valor = null;
+        try {
+            mutex.acquire();
+            try {
+                valor = procesoActual;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Contador de programa del proceso en ejecución (0 si la CPU está libre).
+     */
+    public int getPc() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                if (procesoActual != null) {
+                    valor = procesoActual.getPc();
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Registro de dirección de memoria del proceso en ejecución (0 si está
+     * libre).
+     */
+    public int getMar() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                if (procesoActual != null) {
+                    valor = procesoActual.getMar();
+                }
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    public int getCiclosUsuario() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                valor = ciclosUsuario;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    public int getCiclosSistema() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                valor = ciclosSistema;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    public int getCiclosOcioso() {
+        int valor = 0;
+        try {
+            mutex.acquire();
+            try {
+                valor = ciclosOcioso;
+            } finally {
+                mutex.release();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return valor;
+    }
+
+    /**
+     * Ciclos totales transcurridos desde que arrancó la CPU.
+     */
+    public int getCiclosTotales() {
+        return getCiclosUsuario() + getCiclosSistema() + getCiclosOcioso();
+    }
+}
