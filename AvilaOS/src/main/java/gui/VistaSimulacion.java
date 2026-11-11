@@ -628,6 +628,28 @@ public class VistaSimulacion extends JFrame {
     // ------------------------------------------------------------------
     // Panel de un computador: estado, controles en caliente y 4 colas
     // ------------------------------------------------------------------
+    /** Texto que se muestra para el modo de la CPU. */
+    private static String nombreModo(modelo.enums.ModoCpu modo) {
+        if (modo == modelo.enums.ModoCpu.SISTEMA_OPERATIVO) {
+            return "MODO KERNEL (sistema operativo)";
+        }
+        if (modo == modelo.enums.ModoCpu.USUARIO) {
+            return "MODO USUARIO";
+        }
+        return "CPU OCIOSA";
+    }
+
+    /** Color del texto: rojo en modo kernel, verde en modo usuario, gris si está ociosa. */
+    private static Color colorModo(modelo.enums.ModoCpu modo) {
+        if (modo == modelo.enums.ModoCpu.SISTEMA_OPERATIVO) {
+            return new Color(0xB00020);
+        }
+        if (modo == modelo.enums.ModoCpu.USUARIO) {
+            return new Color(0x1B6E2E);
+        }
+        return Color.GRAY;
+    }
+
     private class PanelComputador extends JPanel {
 
         private final Computador computador;
@@ -761,7 +783,9 @@ public class VistaSimulacion extends JFrame {
                     ? "libre"
                     : enCpu.getNombre() + " (prioridad " + enCpu.getPrioridad() + ", deadline " + enCpu.getDeadline()
                     + ")  PC=" + cpu.getPc() + "  MAR=" + cpu.getMar();
-            lblCpu.setText("CPU: modo " + cpu.getModo() + "  |  proceso en CPU: " + detalle);
+            modelo.enums.ModoCpu modo = cpu.getModo();
+            lblCpu.setText("CPU: " + nombreModo(modo) + "  |  proceso en CPU: " + detalle);
+            lblCpu.setForeground(colorModo(modo));
 
             lblMemoria.setText("RAM: " + kernel.getMemoria().getUsada() + " / "
                     + kernel.getMemoria().getCapacidadTotal() + " ocupada");
