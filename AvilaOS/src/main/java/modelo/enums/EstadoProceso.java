@@ -8,7 +8,13 @@ package modelo.enums;
  * Estados por los que pasa un proceso en ÁvilaOS.
  * @author Alesia Castro
  */
-public enum EstadoProceso { 
-    NUEVO, LISTO, EJECUCION, BLOQUEADO, TERMINADO
+public enum EstadoProceso {
+    NUEVO,
+    LISTO,
+    EJECUCION,
+    BLOQUEADO,
+    LISTO_SUSPENDIDO,
+    BLOQUEADO_SUSPENDIDO,
+    TERMINADO
 }
 

@@ -661,6 +661,8 @@ public class VistaSimulacion extends JFrame {
         private final DefaultTableModel mNuevos = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
         private final DefaultTableModel mListos = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
         private final DefaultTableModel mBloqueados = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
+        private final DefaultTableModel mListosSusp = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
+        private final DefaultTableModel mBloqueadosSusp = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
         private final DefaultTableModel mTerminados = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
 
         PanelComputador(Computador computador) {
@@ -696,10 +698,12 @@ public class VistaSimulacion extends JFrame {
             norte.add(controles, BorderLayout.SOUTH);
             add(norte, BorderLayout.NORTH);
 
-            JPanel colas = new JPanel(new GridLayout(2, 2, 5, 5));
-            colas.add(tabla("Nuevos", mNuevos));
+            JPanel colas = new JPanel(new GridLayout(2, 3, 5, 5));
+            colas.add(tabla("Nuevos (cola a largo plazo)", mNuevos));
             colas.add(tabla("Listos", mListos));
             colas.add(tabla("Bloqueados", mBloqueados));
+            colas.add(tabla("Listos/Suspendidos", mListosSusp));
+            colas.add(tabla("Bloqueados/Suspendidos", mBloqueadosSusp));
             colas.add(tabla("Terminados", mTerminados));
             add(colas, BorderLayout.CENTER);
         }
@@ -793,6 +797,8 @@ public class VistaSimulacion extends JFrame {
             llenarTabla(mNuevos, kernel.obtenerNuevos());
             llenarTabla(mListos, kernel.obtenerListos());
             llenarTabla(mBloqueados, kernel.obtenerBloqueados());
+            llenarTabla(mListosSusp, kernel.obtenerListosSuspendidos());
+            llenarTabla(mBloqueadosSusp, kernel.obtenerBloqueadosSuspendidos());
             llenarTabla(mTerminados, kernel.obtenerTerminados());
         }
     }
