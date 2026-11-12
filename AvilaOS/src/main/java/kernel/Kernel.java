@@ -25,6 +25,8 @@ public class Kernel {
     private final ColaProcesos nuevos;
     private final ColaProcesos listos;
     private final ColaProcesos bloqueados;
+    private final ColaProcesos listosSuspendidos;
+    private final ColaProcesos bloqueadosSuspendidos;
     private final ColaProcesos terminados;
 
     // volatile: la interfaz puede cambiar la política mientras el kernel la usa
@@ -48,6 +50,8 @@ public class Kernel {
         this.nuevos = new ColaProcesos();
         this.listos = new ColaProcesos();
         this.bloqueados = new ColaProcesos();
+        this.listosSuspendidos = new ColaProcesos();
+        this.bloqueadosSuspendidos = new ColaProcesos();
         this.terminados = new ColaProcesos();
     }
 
@@ -497,6 +501,14 @@ public class Kernel {
 
     public Proceso[] obtenerBloqueados() {
         return bloqueados.obtenerListaProcesos();
+    }
+
+    public Proceso[] obtenerListosSuspendidos() {
+        return listosSuspendidos.obtenerListaProcesos();
+    }
+
+    public Proceso[] obtenerBloqueadosSuspendidos() {
+        return bloqueadosSuspendidos.obtenerListaProcesos();
     }
 
     public Proceso[] obtenerTerminados() {
