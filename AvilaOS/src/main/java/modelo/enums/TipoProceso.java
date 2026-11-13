@@ -9,5 +9,5 @@ package modelo.enums;
  * @author Alesia Castro
  */
 public enum TipoProceso {
-    CPU_BOUND, IO_BOUND, PRODUCTOR, CONSUMIDOR
+    CPU_BOUND, IO_BOUND, PRODUCTOR, CONSUMIDOR, ES_ARCHIVO
 }

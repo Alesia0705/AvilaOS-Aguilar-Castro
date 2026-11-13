@@ -14,5 +14,6 @@ public enum MotivoBloqueo {
     SEM_BUFFER_LLENO,
     SEM_BUFFER_VACIO,
     SEM_MUTEX,
-    LATENCIA_RED
+    LATENCIA_RED,
+    ESPERA_DISCO,
 }
