@@ -23,4 +23,10 @@ public interface ServicioSistema {
     
     /** Registra un evento en el log del sistema (si hay uno conectado). */
     void registrarEvento(long ciclo, String descripcion);
+    
+    /**
+     * Genera la solicitud de E/S al disco para este proceso y la encola.
+     * @return false si no se pudo (no hay disco, ruta invalida, sin permiso...)
+     */
+    boolean solicitarDisco(Proceso proceso, long ciclo);
 }

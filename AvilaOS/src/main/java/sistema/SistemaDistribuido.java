@@ -245,6 +245,14 @@ public class SistemaDistribuido implements ServicioSistema {
             actual.registrar(ciclo, descripcion);
         }
     }
+    
+     @Override
+    public boolean solicitarDisco(Proceso proceso, long ciclo) {
+        // Provisional: se conecta con el disco real en los Issues #55 y #56
+        registrarEvento(ciclo, "No hay disco conectado: se rechaza la solicitud de "
+                + proceso.getNombre() + ".");
+        return false;
+    }
     @Override
     public int getLatenciaRed() {
         return latenciaRed;

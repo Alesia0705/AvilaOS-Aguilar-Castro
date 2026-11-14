@@ -136,6 +136,11 @@ public class Kernel {
             if (enCpu.esProdCons()) {
                 cpu.setModo(enCpu.estaEnProtocolo()
                         ? ModoCpu.SISTEMA_OPERATIVO : ModoCpu.USUARIO);
+                // La operacion de archivo cuenta como instruccion en modo sistema operativo
+                if (enCpu.esArchivo()) {
+                    cpu.setModo(enCpu.isSolicitudEnviada()
+                            ? ModoCpu.USUARIO : ModoCpu.SISTEMA_OPERATIVO);
+                }
             }
         }
     }
@@ -229,6 +234,15 @@ public class Kernel {
                 return;
             }
         }
+
+        // Un proceso de E/S de archivo envia su solicitud al disco despues de
+        // ejecutar su primera instruccion (la operacion, en modo sistema operativo)
+        if (enCpu.esArchivo() && !enCpu.isSolicitudEnviada() && enCpu.getDeadline() != 0
+                && enCpu.getTiempoRestante() < enCpu.getInstruccionesTotales()) {
+            enviarSolicitudDisco(enCpu, ciclo);
+            return;
+        }
+
         if (enCpu.getTiempoRestante() <= 0 || enCpu.getDeadline() == 0) {
             cpu.retirar();
             ciclosEnCpu = 0;
@@ -257,6 +271,32 @@ public class Kernel {
         p.reiniciarRafaga();
         bloqueados.encolar(p);
         registrar(p.getNombre() + " se bloquea por E/S durante " + p.getCiclosIo() + " ciclos.");
+    }
+
+    /**
+     * El proceso sale de la CPU y queda bloqueado esperando al disco. Se anota
+     * en bloqueados ANTES de pedir la operacion, para que el disco lo encuentre
+     * si lo despierta enseguida. Si la solicitud no se puede hacer, el proceso
+     * termina.
+     */
+    private void enviarSolicitudDisco(Proceso p, long ciclo) {
+        cpu.retirar();
+        ciclosEnCpu = 0;
+        p.setSolicitudEnviada(true);
+        p.setEstado(EstadoProceso.BLOQUEADO);
+        p.setMotivoBloqueo(MotivoBloqueo.ESPERA_DISCO);
+        bloqueados.encolar(p);
+        ServicioSistema servicio = sistema;
+        if (servicio == null || !servicio.solicitarDisco(p, ciclo)) {
+            bloqueados.quitar(p);
+            p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+            registrar(p.getNombre() + ": solicitud de " + p.getOperacion() + " sobre "
+                    + p.getRutaArchivo() + " rechazada.");
+            finalizarProceso(p, ciclo);
+            return;
+        }
+        registrar(p.getNombre() + " se bloquea esperando al disco ("
+                + p.getOperacion() + " " + p.getRutaArchivo() + ").");
     }
 
     /**

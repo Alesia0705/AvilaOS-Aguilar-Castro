@@ -3,6 +3,7 @@ package modelo;
 import modelo.enums.EstadoProceso;
 import modelo.enums.TipoProceso;
 import modelo.enums.MotivoBloqueo;
+import modelo.enums.TipoOperacion;
 
 /**
  * Representa un proceso dentro del simulador ÁvilaOS.
@@ -55,6 +56,12 @@ public class Proceso {
     private String idBuffer;
     private int ciclosProdCons;
     private int cantidadElementos;
+
+    // --- E/S de archivos (Proyecto 2) ---
+    private TipoOperacion operacion;
+    private String rutaArchivo;
+    private int bloquesArchivo;
+    private boolean solicitudEnviada;
 
     /**
      * Constructor para instanciar un nuevo proceso desde la GUI.
@@ -339,6 +346,48 @@ public class Proceso {
 
     public void incrementarCiclosBloqueadoSemaforo() {
         ciclosBloqueadoSemaforo++;
+    }
+
+    public TipoOperacion getOperacion() {
+        return operacion;
+    }
+
+    public void setOperacion(TipoOperacion operacion) {
+        this.operacion = operacion;
+    }
+
+    public String getRutaArchivo() {
+        return rutaArchivo;
+    }
+
+    public void setRutaArchivo(String rutaArchivo) {
+        this.rutaArchivo = rutaArchivo;
+    }
+
+    /**
+     * Tamano en bloques del archivo (solo se usa al crear).
+     */
+    public int getBloquesArchivo() {
+        return bloquesArchivo;
+    }
+
+    public void setBloquesArchivo(int bloquesArchivo) {
+        this.bloquesArchivo = bloquesArchivo;
+    }
+
+    public boolean esArchivo() {
+        return tipo == TipoProceso.ES_ARCHIVO;
+    }
+
+    /**
+     * true cuando el proceso ya envio su solicitud al disco.
+     */
+    public boolean isSolicitudEnviada() {
+        return solicitudEnviada;
+    }
+
+    public void setSolicitudEnviada(boolean solicitudEnviada) {
+        this.solicitudEnviada = solicitudEnviada;
     }
 
     @Override
