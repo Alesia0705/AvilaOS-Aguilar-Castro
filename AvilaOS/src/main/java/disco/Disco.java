@@ -2,6 +2,7 @@ package disco;
 
 import java.util.concurrent.Semaphore;
 import kernel.ServicioSistema;
+import modelo.enums.TipoOperacion;
 import modelo.enums.TipoPoliticaDisco;
 import reloj.EscuchaReloj;
 import util.ListaEnlazada;
@@ -336,7 +337,8 @@ public class Disco implements EscuchaReloj {
             colaSolicitudes.quitar(sel);
 
             this.solicitudActual = sel;
-            this.ciclosServicioRestantes = 1;
+            // cada bloque leido o escrito cuesta un ciclo de servicio
+            this.ciclosServicioRestantes = Math.max(1, sel.getCantidadBloques());
             this.destinoIntermedio = -1;
             this.saltoCircularPendiente = false;
 
@@ -401,7 +403,13 @@ public class Disco implements EscuchaReloj {
                     + terminada.getProceso().getNombre() + " (" + terminada.getOperacion()
                     + ") en el bloque " + terminada.getBloque()
                     + " (" + politica.getTipo() + ").");
-            srv.despertar(terminada.getProceso());
+            TipoOperacion op = terminada.getOperacion();
+            if (op == TipoOperacion.SUSPENDER || op == TipoOperacion.REACTIVAR) {
+                // la suspension o reactivacion de un proceso la concluye el kernel de su computador
+                srv.completarSwap(terminada.getProceso(), op, ciclo);
+            } else {
+                srv.despertar(terminada.getProceso());
+            }
         }
     }
 
