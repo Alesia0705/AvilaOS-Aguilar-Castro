@@ -305,6 +305,7 @@ public class SistemaDistribuido implements ServicioSistema {
         }
 
         int bloqueObjetivo;
+        int cantidadBloques = 1;
         switch (op) {
             case CREAR -> {
                 NodoArchivo creado = fs.crearArchivo(ruta, proceso.getBloquesArchivo(), Permiso.PUBLICO);
@@ -314,6 +315,7 @@ public class SistemaDistribuido implements ServicioSistema {
                     return false;
                 }
                 bloqueObjetivo = creado.getPrimerBloque();
+                cantidadBloques = creado.getTamanoBloques();
             }
             case LEER -> {
                 NodoArchivo nodo = fs.leerArchivo(ruta, fs.getModoActual(), fs.getUsuarioActual());
@@ -323,6 +325,7 @@ public class SistemaDistribuido implements ServicioSistema {
                     return false;
                 }
                 bloqueObjetivo = nodo.getPrimerBloque();
+                cantidadBloques = Math.max(1, nodo.getTamanoBloques());
             }
             case ACTUALIZAR -> {
                 NodoArchivo nodo = fs.leerArchivo(ruta, fs.getModoActual(), fs.getUsuarioActual());
@@ -339,6 +342,7 @@ public class SistemaDistribuido implements ServicioSistema {
                     }
                 }
                 bloqueObjetivo = nodo.getPrimerBloque();
+                cantidadBloques = Math.max(1, nodo.getTamanoBloques());
             }
             case ELIMINAR -> {
                 NodoArchivo nodo = fs.buscarNodo(ruta);
@@ -353,13 +357,14 @@ public class SistemaDistribuido implements ServicioSistema {
                     return false;
                 }
                 bloqueObjetivo = Math.max(0, bloqueAntes);
+                cantidadBloques = Math.max(1, nodo.getTamanoBloques());
             }
             default -> {
                 return false;
             }
         }
 
-        SolicitudDisco solicitud = new SolicitudDisco(proceso, bloqueObjetivo, op, ciclo);
+        SolicitudDisco solicitud = new SolicitudDisco(proceso, bloqueObjetivo, op, ciclo, cantidadBloques);
         if (!d.encolarSolicitud(solicitud)) {
             registrarEvento(ciclo, "No se pudo encolar solicitud de disco para " + proceso.getNombre() + ".");
             return false;
@@ -367,6 +372,61 @@ public class SistemaDistribuido implements ServicioSistema {
         registrarEvento(ciclo, "Proceso " + proceso.getNombre() + " solicita " + op
                 + " en " + ruta + " (bloque " + bloqueObjetivo + ").");
         return true;
+    }
+
+    @Override
+    public boolean solicitarSwap(Proceso proceso, TipoOperacion operacion, long ciclo) {
+        Disco d = this.disco;
+        if (proceso == null || d == null) {
+            return false;
+        }
+        int bloque;
+        if (operacion == TipoOperacion.SUSPENDER) {
+            // 1 unidad de RAM = 1 bloque de swap
+            bloque = d.asignarSwap(proceso.getNombre(), proceso.getMemoriaRAM());
+            if (bloque < 0) {
+                registrarEvento(ciclo, "Sin espacio en swap para suspender a " + proceso.getNombre()
+                        + " (necesita " + proceso.getMemoriaRAM() + " bloques, hay "
+                        + d.contarBloquesLibres(true) + " libres).");
+                return false;
+            }
+            proceso.setBloqueSwap(bloque);
+        } else if (operacion == TipoOperacion.REACTIVAR) {
+            bloque = proceso.getBloqueSwap();
+            if (bloque < 0) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        SolicitudDisco solicitud = new SolicitudDisco(proceso, bloque, operacion, ciclo, proceso.getMemoriaRAM());
+        if (!d.encolarSolicitud(solicitud)) {
+            if (operacion == TipoOperacion.SUSPENDER) {
+                d.liberarCadena(bloque);
+                proceso.setBloqueSwap(-1);
+            }
+            return false;
+        }
+        registrarEvento(ciclo, "Proceso " + proceso.getNombre() + " solicita " + operacion
+                + " en swap (bloque " + bloque + ", " + proceso.getMemoriaRAM() + " bloques).");
+        return true;
+    }
+
+    @Override
+    public void completarSwap(Proceso proceso, TipoOperacion operacion, long ciclo) {
+        Computador destino = getComputador(proceso.getComputadorAsignado());
+        if (destino != null) {
+            destino.getKernel().completarSwap(proceso, operacion, ciclo);
+        }
+    }
+
+    @Override
+    public void liberarSwap(Proceso proceso) {
+        Disco d = this.disco;
+        if (d != null && proceso != null && proceso.getBloqueSwap() >= 0) {
+            d.liberarCadena(proceso.getBloqueSwap());
+            proceso.setBloqueSwap(-1);
+        }
     }
 
     @Override
