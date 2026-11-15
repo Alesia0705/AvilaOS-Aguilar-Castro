@@ -1,7 +1,13 @@
 package sistema;
 
 import computador.Computador;
+import disco.Disco;
+import disco.SolicitudDisco;
+import filesystem.NodoArchivo;
+import filesystem.SistemaArchivos;
 import modelo.Proceso;
+import modelo.enums.Permiso;
+import modelo.enums.TipoOperacion;
 import planificacion.PoliticaPlanificacion;
 import sincronizacion.Buffer;
 import reloj.RelojGlobal;
@@ -11,9 +17,8 @@ import kernel.Kernel;
 import util.LogEventos;
 
 /**
- * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster y el
- * parámetro de latencia de red. Es el punto de entrada para crear computadores
- * y enviarles procesos.
+ * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster, el
+ * parámetro de latencia de red, el disco simulado y el sistema de archivos.
  *
  * @author Alesia Castro
  */
@@ -27,6 +32,8 @@ public class SistemaDistribuido implements ServicioSistema {
     private final RelojGlobal reloj;
     // volatile: la interfaz lo conecta y lo leen los hilos de los computadores
     private volatile LogEventos log;
+    private volatile Disco disco;
+    private volatile SistemaArchivos sistemaArchivos;
 
     /**
      * @param latenciaRed ciclos extra que cuesta cada acceso a un buffer remoto
@@ -46,6 +53,34 @@ public class SistemaDistribuido implements ServicioSistema {
         this.cantidadComputadores = 0;
         this.buffers = new Buffer[4];
         this.cantidadBuffers = 0;
+    }
+
+    /**
+     * Conecta el disco y su sistema de archivos al sistema distribuido y registra
+     * el disco en el reloj global.
+     */
+    public void conectarDisco(Disco disco, SistemaArchivos sistemaArchivos) {
+        this.disco = disco;
+        this.sistemaArchivos = sistemaArchivos;
+        if (disco != null) {
+            disco.setSistema(this);
+            reloj.registrar(disco);
+        }
+    }
+
+    /**
+     * Conecta el disco y crea automáticamente un SistemaArchivos asociado.
+     */
+    public void conectarDisco(Disco disco) {
+        conectarDisco(disco, (disco != null) ? new SistemaArchivos(disco) : null);
+    }
+
+    public Disco getDisco() {
+        return disco;
+    }
+
+    public SistemaArchivos getSistemaArchivos() {
+        return sistemaArchivos;
     }
 
     /**
@@ -181,7 +216,8 @@ public class SistemaDistribuido implements ServicioSistema {
     public int getCantidadBuffers() {
         return cantidadBuffers;
     }
-        /** CPU de cada computador: para la utilización del sistema y la gráfica. */
+
+    /** CPU de cada computador: para la utilización del sistema y la gráfica. */
     public Cpu[] getCpus() {
         Cpu[] cpus = new Cpu[cantidadComputadores];
         for (int i = 0; i < cantidadComputadores; i++) {
@@ -230,10 +266,12 @@ public class SistemaDistribuido implements ServicioSistema {
         }
         return todos;
     }
+
     public int getCantidadComputadores() {
         return cantidadComputadores;
     }
-        /** Conecta el log de eventos. Puede ser null (sin log). */
+
+    /** Conecta el log de eventos. Puede ser null (sin log). */
     public void setLogEventos(LogEventos log) {
         this.log = log;
     }
@@ -245,14 +283,92 @@ public class SistemaDistribuido implements ServicioSistema {
             actual.registrar(ciclo, descripcion);
         }
     }
-    
-     @Override
+
+    @Override
     public boolean solicitarDisco(Proceso proceso, long ciclo) {
-        // Provisional: se conecta con el disco real en los Issues #55 y #56
-        registrarEvento(ciclo, "No hay disco conectado: se rechaza la solicitud de "
-                + proceso.getNombre() + ".");
-        return false;
+        if (proceso == null) {
+            return false;
+        }
+        Disco d = this.disco;
+        SistemaArchivos fs = this.sistemaArchivos;
+        if (d == null || fs == null) {
+            registrarEvento(ciclo, "No hay disco conectado: se rechaza la solicitud de "
+                    + proceso.getNombre() + ".");
+            return false;
+        }
+
+        String ruta = proceso.getRutaArchivo();
+        TipoOperacion op = proceso.getOperacion();
+        if (ruta == null || ruta.trim().isEmpty() || op == null) {
+            registrarEvento(ciclo, "Solicitud de archivo inválida para " + proceso.getNombre() + ".");
+            return false;
+        }
+
+        int bloqueObjetivo;
+        switch (op) {
+            case CREAR -> {
+                NodoArchivo creado = fs.crearArchivo(ruta, proceso.getBloquesArchivo(), Permiso.PUBLICO);
+                if (creado == null) {
+                    registrarEvento(ciclo, "Error al crear " + ruta + " para " + proceso.getNombre()
+                            + " (sin espacio, ruta inválida o sin permiso).");
+                    return false;
+                }
+                bloqueObjetivo = creado.getPrimerBloque();
+            }
+            case LEER -> {
+                NodoArchivo nodo = fs.leerArchivo(ruta, fs.getModoActual(), fs.getUsuarioActual());
+                if (nodo == null) {
+                    registrarEvento(ciclo, "Error al leer " + ruta + " para " + proceso.getNombre()
+                            + " (no existe o acceso denegado).");
+                    return false;
+                }
+                bloqueObjetivo = nodo.getPrimerBloque();
+            }
+            case ACTUALIZAR -> {
+                NodoArchivo nodo = fs.leerArchivo(ruta, fs.getModoActual(), fs.getUsuarioActual());
+                if (nodo == null) {
+                    registrarEvento(ciclo, "Error al actualizar " + ruta + " para " + proceso.getNombre()
+                            + " (no existe o acceso denegado).");
+                    return false;
+                }
+                int nuevosBloques = proceso.getBloquesArchivo();
+                if (nuevosBloques > 0 && nuevosBloques != nodo.getTamanoBloques()) {
+                    if (!fs.actualizar(ruta, null, nuevosBloques, null, fs.getModoActual(), fs.getUsuarioActual())) {
+                        registrarEvento(ciclo, "Error al redimensionar " + ruta + " para " + proceso.getNombre() + ".");
+                        return false;
+                    }
+                }
+                bloqueObjetivo = nodo.getPrimerBloque();
+            }
+            case ELIMINAR -> {
+                NodoArchivo nodo = fs.buscarNodo(ruta);
+                if (nodo == null) {
+                    registrarEvento(ciclo, "Error al eliminar " + ruta + " para " + proceso.getNombre()
+                            + " (no existe).");
+                    return false;
+                }
+                int bloqueAntes = nodo.isEsDirectorio() ? 0 : nodo.getPrimerBloque();
+                if (!fs.eliminar(ruta)) {
+                    registrarEvento(ciclo, "Acceso denegado al eliminar " + ruta + " para " + proceso.getNombre() + ".");
+                    return false;
+                }
+                bloqueObjetivo = Math.max(0, bloqueAntes);
+            }
+            default -> {
+                return false;
+            }
+        }
+
+        SolicitudDisco solicitud = new SolicitudDisco(proceso, bloqueObjetivo, op, ciclo);
+        if (!d.encolarSolicitud(solicitud)) {
+            registrarEvento(ciclo, "No se pudo encolar solicitud de disco para " + proceso.getNombre() + ".");
+            return false;
+        }
+        registrarEvento(ciclo, "Proceso " + proceso.getNombre() + " solicita " + op
+                + " en " + ruta + " (bloque " + bloqueObjetivo + ").");
+        return true;
     }
+
     @Override
     public int getLatenciaRed() {
         return latenciaRed;
