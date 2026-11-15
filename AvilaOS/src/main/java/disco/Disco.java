@@ -82,15 +82,35 @@ public class Disco implements EscuchaReloj {
     }
 
     /**
-     * Reserva los ultimos bloquesSwap bloques del disco como area de intercambio.
+     * Reserva como area de intercambio los ultimos bloquesSwap bloques LIBRES del
+     * disco (los bloques ya ocupados por archivos se saltan). Asi el area de swap
+     * nunca pisa a un archivo cargado desde el JSON.
+     *
+     * @throws IllegalArgumentException si no hay suficientes bloques libres
      */
     public final void configurarSwap(int bloquesSwap) {
         adquirir(mutexBloques);
         try {
-            this.bloquesSwap = bloquesSwap;
-            int inicioSwap = totalBloques - bloquesSwap;
+            int libres = 0;
             for (int i = 0; i < totalBloques; i++) {
-                bloques[i].setEsSwap(i >= inicioSwap);
+                if (!bloques[i].isOcupado() || bloques[i].isEsSwap()) {
+                    libres++;
+                }
+            }
+            if (bloquesSwap < 0 || bloquesSwap > libres) {
+                throw new IllegalArgumentException("El swap pide " + bloquesSwap
+                        + " bloques, pero el disco solo tiene " + libres + " libres.");
+            }
+            this.bloquesSwap = bloquesSwap;
+            int pendientes = bloquesSwap;
+            for (int i = totalBloques - 1; i >= 0; i--) {
+                boolean disponible = !bloques[i].isOcupado() || bloques[i].isEsSwap();
+                if (pendientes > 0 && disponible) {
+                    bloques[i].setEsSwap(true);
+                    pendientes--;
+                } else {
+                    bloques[i].setEsSwap(false);
+                }
             }
         } finally {
             mutexBloques.release();
