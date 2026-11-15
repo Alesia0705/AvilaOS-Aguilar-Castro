@@ -7,6 +7,7 @@ import planificacion.PoliticaFCFS;
 import planificacion.PoliticaPlanificacion;
 import planificacion.PoliticaPrioridades;
 import planificacion.PoliticaRoundRobin;
+import util.GestorProcesosJson;
 
 /**
  * Validación de los datos que escribe el usuario y creación de procesos y
@@ -15,6 +16,7 @@ import planificacion.PoliticaRoundRobin;
  *
  * Todos los métodos lanzan IllegalArgumentException con un mensaje listo para
  * mostrar al usuario.
+ *
  * @author Alesia Castro
  */
 public final class FabricaSistema {
@@ -140,6 +142,27 @@ public final class FabricaSistema {
             proceso.setCiclosProdCons(entero("Ciclos de trabajo por elemento", ciclosProdCons, 1, 1000));
             proceso.setCantidadElementos(entero("Cantidad de elementos", elementos, 1, 10000));
         }
+        return proceso;
+    }
+
+    /**
+     * Crea un proceso de archivo a partir de los datos del JSON. La primera
+     * instrucción es la operación de archivo; hacen falta al menos 2
+     * instrucciones para que el proceso termine en modo usuario.
+     */
+    public static Proceso crearProcesoArchivo(GestorProcesosJson.DatosProceso d, int ramComputador) {
+        String nombre = texto("Nombre", d.nombre, 30);
+        int instr = entero("Instrucciones de " + nombre, d.instrucciones, 2, 100000);
+        int ram = entero("Memoria de " + nombre, d.memoria, 1, 1000000);
+        int dead = entero("Deadline de " + nombre, d.deadline, 1, 1000000);
+        if (ram > ramComputador) {
+            throw new IllegalArgumentException("El proceso \"" + nombre + "\" pide " + ram
+                    + " de RAM, pero el computador solo tiene " + ramComputador + ".");
+        }
+        Proceso proceso = new Proceso(nombre, instr, ram, 1, dead, TipoProceso.ES_ARCHIVO, 1);
+        proceso.setOperacion(d.operacion);
+        proceso.setRutaArchivo(d.ruta);
+        proceso.setBloquesArchivo(d.bloquesArchivo);
         return proceso;
     }
 }
