@@ -19,7 +19,7 @@ public class PruebaFilesystemJson {
         SistemaArchivos fs = new SistemaArchivos(disco);
 
         // 1. Prueba Issue #60: Carga del JSON inicial del enunciado
-        GestorArchivosJson.cargarEn("../json/sistema_archivos_enunciado.json", fs);
+        GestorArchivosJson.cargarEn("../json/sistema_archivos_ejemplo.json", fs);
         System.out.println("1. Archivos cargados desde JSON: " + fs.obtenerTodosLosArchivos().length + " (esperado: 8)");
         System.out.println("   Bloques libres tras carga: " + disco.contarBloquesLibres(false) + " (esperado: 362)");
 
