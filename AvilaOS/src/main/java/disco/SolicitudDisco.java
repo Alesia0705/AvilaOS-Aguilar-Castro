@@ -13,8 +13,17 @@ public class SolicitudDisco {
     private final int bloque;
     private final TipoOperacion operacion;
     private final long cicloLlegada;
+    private final int cantidadBloques;
 
     public SolicitudDisco(Proceso proceso, int bloque, TipoOperacion operacion, long cicloLlegada) {
+        this(proceso, bloque, operacion, cicloLlegada, 1);
+    }
+
+    /**
+     * @param cantidadBloques bloques que se leen o escriben: cada uno cuesta un ciclo de servicio
+     */
+    public SolicitudDisco(Proceso proceso, int bloque, TipoOperacion operacion, long cicloLlegada,
+            int cantidadBloques) {
         if (proceso == null || operacion == null) {
             throw new IllegalArgumentException("La solicitud necesita un proceso y una operación");
         }
@@ -25,6 +34,11 @@ public class SolicitudDisco {
         this.bloque = bloque;
         this.operacion = operacion;
         this.cicloLlegada = cicloLlegada;
+        this.cantidadBloques = Math.max(1, cantidadBloques);
+    }
+
+    public int getCantidadBloques() {
+        return cantidadBloques;
     }
 
     public Proceso getProceso() {

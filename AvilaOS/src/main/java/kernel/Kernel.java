@@ -9,6 +9,8 @@ import planificacion.PoliticaPlanificacion;
 import modelo.enums.MotivoBloqueo;
 import modelo.enums.TipoProceso;
 import modelo.enums.ModoCpu;
+import modelo.enums.TipoOperacion;
+import java.util.concurrent.atomic.AtomicInteger;
 import sincronizacion.Buffer;
 import sincronizacion.Semaforo;
 
@@ -38,6 +40,15 @@ public class Kernel {
 
     // Último ciclo en que el kernel tomó decisiones; se usa como fecha de los eventos del log
     private volatile long cicloLog;
+
+    // --- Planificador de mediano plazo ---
+    // RAM de los procesos que se estan suspendiendo (su escritura a swap sigue en la cola del disco):
+    // se cuenta como "por liberar" para no suspender mas procesos de los necesarios
+    private final AtomicInteger ramPorLiberar = new AtomicInteger();
+    private final AtomicInteger suspensiones = new AtomicInteger();
+    private final AtomicInteger reactivaciones = new AtomicInteger();
+    // ultimo aviso del mediano plazo, para no repetir la misma linea en cada ciclo
+    private String ultimoAviso = "";
 
     public Kernel(Memoria memoria, Cpu cpu, PoliticaPlanificacion politica) {
         if (memoria == null || cpu == null || politica == null) {
@@ -90,6 +101,7 @@ public class Kernel {
      */
     public void admitirNuevos() {
         Proceso[] pendientes = nuevos.obtenerListaProcesos();
+        boolean suspensionPedida = false;
         for (int i = 0; i < pendientes.length; i++) {
             Proceso p = pendientes[i];
             int ram = p.getMemoriaRAM();
@@ -103,8 +115,14 @@ public class Kernel {
                 nuevos.quitar(p);
                 p.setEstado(EstadoProceso.LISTO);
                 listos.encolar(p);
+                p.setEnMemoria(true);
                 registrar(p.getNombre() + " admitido en memoria (RAM " + ram + ", libre "
                         + memoria.getLibre() + ").");
+            } else if (!suspensionPedida) {
+                // No cabe: el planificador de mediano plazo intenta hacerle lugar suspendiendo bloqueados.
+                // Solo se atiende al primero que no cabe (por orden de llegada).
+                suspensionPedida = true;
+                liberarMemoriaPara(p);
             }
         }
     }
@@ -120,6 +138,7 @@ public class Kernel {
         cicloLog = ciclo;
 
         admitirNuevos();
+        reactivarSuspendidos(ciclo);
         descontarDeadlines(ciclo);
         atenderBloqueados();
         revisarProcesoEnCpu(ciclo);
@@ -136,11 +155,11 @@ public class Kernel {
             if (enCpu.esProdCons()) {
                 cpu.setModo(enCpu.estaEnProtocolo()
                         ? ModoCpu.SISTEMA_OPERATIVO : ModoCpu.USUARIO);
-                // La operacion de archivo cuenta como instruccion en modo sistema operativo
-                if (enCpu.esArchivo()) {
-                    cpu.setModo(enCpu.isSolicitudEnviada()
-                            ? ModoCpu.USUARIO : ModoCpu.SISTEMA_OPERATIVO);
-                }
+            }
+            // La operacion de archivo cuenta como instruccion en modo sistema operativo
+            if (enCpu.esArchivo()) {
+                cpu.setModo(enCpu.isSolicitudEnviada()
+                        ? ModoCpu.USUARIO : ModoCpu.SISTEMA_OPERATIVO);
             }
         }
     }
@@ -179,6 +198,22 @@ public class Kernel {
             }
         }
 
+        // Los suspendidos tambien consumen su deadline: si se les vence en swap, terminan
+        Proceso[] enListosSusp = listosSuspendidos.obtenerListaProcesos();
+        for (int i = 0; i < enListosSusp.length; i++) {
+            enListosSusp[i].decrementarDeadline();
+            if (enListosSusp[i].getDeadline() == 0 && listosSuspendidos.quitar(enListosSusp[i])) {
+                finalizarProceso(enListosSusp[i], ciclo);
+            }
+        }
+        Proceso[] enBloqSusp = bloqueadosSuspendidos.obtenerListaProcesos();
+        for (int i = 0; i < enBloqSusp.length; i++) {
+            enBloqSusp[i].decrementarDeadline();
+            if (enBloqSusp[i].getDeadline() == 0 && bloqueadosSuspendidos.quitar(enBloqSusp[i])) {
+                finalizarProceso(enBloqSusp[i], ciclo);
+            }
+        }
+
         Proceso enCpu = cpu.getProcesoActual();
         if (enCpu != null) {
             enCpu.decrementarDeadline();
@@ -206,12 +241,39 @@ public class Kernel {
             }
             p.decrementarEspera();
             if (p.getCiclosEsperaRestantes() == 0) {
-                bloqueados.quitar(p);
-                p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
-                p.setEstado(EstadoProceso.LISTO);
-                listos.encolar(p);
-                registrar(p.getNombre() + " vuelve a listos ("
-                        + (motivo == MotivoBloqueo.ESPERA_ES ? "terminó la E/S" : "llegó el dato remoto") + ").");
+                synchronized (p) {
+                    if (p.isSuspendiendo()) {
+                        // ya se esta pasando a swap: al terminar la suspension quedara listo/suspendido
+                        p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+                    } else if (bloqueados.quitar(p)) {
+                        p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+                        p.setEstado(EstadoProceso.LISTO);
+                        listos.encolar(p);
+                        registrar(p.getNombre() + " vuelve a listos ("
+                                + (motivo == MotivoBloqueo.ESPERA_ES ? "terminó la E/S" : "llegó el dato remoto") + ").");
+                    }
+                }
+            }
+        }
+
+        // Los bloqueados que estan en swap siguen esperando su E/S; al cumplirse pasan a listos/suspendidos
+        Proceso[] suspendidosAhora = bloqueadosSuspendidos.obtenerListaProcesos();
+        for (Proceso p : suspendidosAhora) {
+            p.incrementarCiclosBloqueado();
+            MotivoBloqueo motivo = p.getMotivoBloqueo();
+            if (motivo != MotivoBloqueo.ESPERA_ES && motivo != MotivoBloqueo.LATENCIA_RED) {
+                continue;
+            }
+            p.decrementarEspera();
+            if (p.getCiclosEsperaRestantes() == 0) {
+                synchronized (p) {
+                    if (bloqueadosSuspendidos.quitar(p)) {
+                        p.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+                        p.setEstado(EstadoProceso.LISTO_SUSPENDIDO);
+                        listosSuspendidos.encolar(p);
+                        registrar(p.getNombre() + " pasa a listo/suspendido (terminó su espera mientras estaba en swap).");
+                    }
+                }
             }
         }
     }
@@ -474,8 +536,21 @@ public class Kernel {
         if (proceso.esProdCons()) {
             liberarRecursosProdCons(proceso);
         }
-        memoria.liberar(proceso.getMemoriaRAM());
-        proceso.setEstado(EstadoProceso.TERMINADO);
+        synchronized (proceso) {
+            // un proceso suspendido ya devolvio su RAM; uno que se esta suspendiendo todavia la tiene
+            if (proceso.isEnMemoria()) {
+                memoria.liberar(proceso.getMemoriaRAM());
+            }
+            if (proceso.isSuspendiendo()) {
+                ramPorLiberar.addAndGet(-proceso.getMemoriaRAM());
+            }
+            proceso.terminarTransitoSwap();
+            proceso.setEstado(EstadoProceso.TERMINADO);
+        }
+        ServicioSistema servicioSwap = sistema;
+        if (servicioSwap != null) {
+            servicioSwap.liberarSwap(proceso);
+        }
         proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
         proceso.setCicloFinalizacion(ciclo);
         terminados.encolar(proceso);
@@ -528,6 +603,185 @@ public class Kernel {
         } else {
             listos.encolar(siguiente);
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Planificador de mediano plazo (suspension y reactivacion con swap)
+    // ------------------------------------------------------------------
+    /**
+     * Un proceso nuevo no cabe en la RAM: se suspenden procesos bloqueados
+     * hasta que su RAM, sumada a la libre y a la que ya se esta liberando,
+     * alcance. Cada suspension es una solicitud de escritura a swap en la cola
+     * del disco; la RAM se libera cuando el disco termina (completarSwap).
+     */
+    private void liberarMemoriaPara(Proceso nuevo) {
+        int falta = nuevo.getMemoriaRAM() - memoria.getLibre() - ramPorLiberar.get();
+        while (falta > 0) {
+            Proceso victima = elegirVictima();
+            if (victima == null) {
+                avisarUnaVez("Mediano plazo: " + nuevo.getNombre() + " no cabe en RAM y no hay procesos bloqueados que suspender.");
+                return;
+            }
+            if (!iniciarSuspension(victima, nuevo)) {
+                return;
+            }
+            falta -= victima.getMemoriaRAM();
+        }
+    }
+
+    /**
+     * Criterio para elegir a quien suspender: solo procesos BLOQUEADOS (no
+     * van a usar la CPU pronto), nunca el que esta en la CPU ni los listos.
+     * Entre ellos, el que mas RAM ocupa: libera mas memoria con menos
+     * escrituras a swap (cada una cuesta un ciclo de disco por bloque). Si
+     * empatan, el que lleva menos tiempo bloqueado, porque es al que le falta
+     * mas para despertar (en una cola FIFO es el ultimo en ser atendido).
+     */
+    private Proceso elegirVictima() {
+        Proceso[] candidatos = bloqueados.obtenerListaProcesos();
+        Proceso mejor = null;
+        for (int i = 0; i < candidatos.length; i++) {
+            Proceso c = candidatos[i];
+            if (c.getEstado() != EstadoProceso.BLOQUEADO || c.isEnTransitoSwap() || !c.isEnMemoria()) {
+                continue;
+            }
+            if (mejor == null || c.getMemoriaRAM() > mejor.getMemoriaRAM()
+                    || (c.getMemoriaRAM() == mejor.getMemoriaRAM()
+                    && c.getCiclosBloqueado() < mejor.getCiclosBloqueado())) {
+                mejor = c;
+            }
+        }
+        return mejor;
+    }
+
+    private boolean iniciarSuspension(Proceso victima, Proceso nuevo) {
+        ServicioSistema servicio = sistema;
+        if (servicio == null) {
+            return false;
+        }
+        synchronized (victima) {
+            if (victima.getEstado() != EstadoProceso.BLOQUEADO || victima.isEnTransitoSwap()) {
+                return false;
+            }
+            // se marca antes de pedir el swap: si el disco o un semaforo lo despiertan enseguida, lo sabra
+            victima.marcarSuspendiendo();
+        }
+        ramPorLiberar.addAndGet(victima.getMemoriaRAM());
+        if (!servicio.solicitarSwap(victima, TipoOperacion.SUSPENDER, cicloLog)) {
+            ramPorLiberar.addAndGet(-victima.getMemoriaRAM());
+            victima.terminarTransitoSwap();
+            avisarUnaVez("Mediano plazo: no se pudo suspender a " + victima.getNombre()
+                    + " para admitir a " + nuevo.getNombre() + " (sin espacio en swap).");
+            return false;
+        }
+        registrar("Mediano plazo: suspende a " + victima.getNombre() + " (bloqueado, RAM "
+                + victima.getMemoriaRAM() + ") para hacerle lugar a " + nuevo.getNombre() + ".");
+        return true;
+    }
+
+    /**
+     * Cuando hay RAM libre y no hay procesos nuevos esperando (ellos tienen
+     * prioridad, porque la suspension se hizo para ellos), se trae de swap al
+     * primer listo/suspendido. Se reserva la RAM al pedirlo y el proceso vuelve
+     * a listos cuando el disco termina de leerlo.
+     */
+    private void reactivarSuspendidos(long ciclo) {
+        if (!nuevos.estaVacia() || ramPorLiberar.get() > 0) {
+            return;
+        }
+        ServicioSistema servicio = sistema;
+        if (servicio == null) {
+            return;
+        }
+        Proceso[] lista = listosSuspendidos.obtenerListaProcesos();
+        for (int i = 0; i < lista.length; i++) {
+            Proceso p = lista[i];
+            if (p.isEnTransitoSwap()) {
+                continue;
+            }
+            if (!memoria.reservar(p.getMemoriaRAM())) {
+                return;   // por orden de llegada: si el primero no cabe, nadie se le adelanta
+            }
+            synchronized (p) {
+                if (p.getEstado() != EstadoProceso.LISTO_SUSPENDIDO || p.isEnTransitoSwap()) {
+                    memoria.liberar(p.getMemoriaRAM());
+                    continue;
+                }
+                p.marcarReactivando();
+                p.setEnMemoria(true);
+            }
+            if (!servicio.solicitarSwap(p, TipoOperacion.REACTIVAR, ciclo)) {
+                memoria.liberar(p.getMemoriaRAM());
+                p.setEnMemoria(false);
+                p.terminarTransitoSwap();
+                return;
+            }
+            registrar("Mediano plazo: reactiva a " + p.getNombre() + " (RAM " + p.getMemoriaRAM()
+                    + ", libre " + memoria.getLibre() + ").");
+        }
+    }
+
+    /**
+     * El disco termino la solicitud de swap de un proceso de este computador.
+     * Suspension: se libera su RAM y pasa a bloqueado/suspendido (o a
+     * listo/suspendido si lo que esperaba ya ocurrio). Reactivacion: se liberan
+     * sus bloques de swap y vuelve a listos. Si el proceso ya habia terminado
+     * (deadline) no se hace nada.
+     */
+    public void completarSwap(Proceso proceso, TipoOperacion operacion, long ciclo) {
+        ServicioSistema servicio = sistema;
+        synchronized (proceso) {
+            if (proceso.getEstado() == EstadoProceso.TERMINADO) {
+                return;
+            }
+            if (operacion == TipoOperacion.SUSPENDER && proceso.isSuspendiendo()
+                    && bloqueados.quitar(proceso)) {
+                memoria.liberar(proceso.getMemoriaRAM());
+                proceso.setEnMemoria(false);
+                ramPorLiberar.addAndGet(-proceso.getMemoriaRAM());
+                proceso.terminarTransitoSwap();
+                proceso.incrementarVecesSuspendido();
+                suspensiones.incrementAndGet();
+                if (proceso.getMotivoBloqueo() == MotivoBloqueo.NINGUNO) {
+                    proceso.setEstado(EstadoProceso.LISTO_SUSPENDIDO);
+                    listosSuspendidos.encolar(proceso);
+                } else {
+                    proceso.setEstado(EstadoProceso.BLOQUEADO_SUSPENDIDO);
+                    bloqueadosSuspendidos.encolar(proceso);
+                }
+                cicloLog = Math.max(cicloLog, ciclo);
+                registrar(proceso.getNombre() + " suspendido: pasa a " + proceso.getEstado()
+                        + " y libera " + proceso.getMemoriaRAM() + " de RAM (libre " + memoria.getLibre() + ").");
+            } else if (operacion == TipoOperacion.REACTIVAR && proceso.isReactivando()
+                    && listosSuspendidos.quitar(proceso)) {
+                proceso.terminarTransitoSwap();
+                proceso.setEstado(EstadoProceso.LISTO);
+                listos.encolar(proceso);
+                reactivaciones.incrementAndGet();
+                if (servicio != null) {
+                    servicio.liberarSwap(proceso);
+                }
+                cicloLog = Math.max(cicloLog, ciclo);
+                registrar(proceso.getNombre() + " reactivado: vuelve a listos.");
+            }
+        }
+    }
+
+    private void avisarUnaVez(String aviso) {
+        if (!aviso.equals(ultimoAviso)) {
+            ultimoAviso = aviso;
+            registrar(aviso);
+        }
+    }
+
+    /** Veces que este kernel suspendio un proceso (para las metricas). */
+    public int getSuspensiones() {
+        return suspensiones.get();
+    }
+
+    /** Veces que este kernel reactivo un proceso (para las metricas). */
+    public int getReactivaciones() {
+        return reactivaciones.get();
     }
 
     // --- Consultas para la interfaz (copias: la vista solo observa) ---
@@ -583,10 +837,21 @@ public class Kernel {
      * otro computador (o el propio) cuando un semSignal lo despierta.
      */
     public void despertarBloqueado(Proceso proceso) {
-        if (bloqueados.quitar(proceso)) {
-            proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
-            proceso.setEstado(EstadoProceso.LISTO);
-            listos.encolar(proceso);
+        synchronized (proceso) {
+            if (proceso.isSuspendiendo() && proceso.getEstado() == EstadoProceso.BLOQUEADO) {
+                // se esta pasando a swap: ya no espera nada, al terminar quedara listo/suspendido
+                proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+            } else if (bloqueados.quitar(proceso)) {
+                proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+                proceso.setEstado(EstadoProceso.LISTO);
+                listos.encolar(proceso);
+            } else if (bloqueadosSuspendidos.quitar(proceso)) {
+                // despierta en swap: pasa a listo/suspendido y espera a que haya RAM para reactivarlo
+                proceso.setMotivoBloqueo(MotivoBloqueo.NINGUNO);
+                proceso.setEstado(EstadoProceso.LISTO_SUSPENDIDO);
+                listosSuspendidos.encolar(proceso);
+                registrar(proceso.getNombre() + " pasa a listo/suspendido (se cumplió lo que esperaba mientras estaba en swap).");
+            }
         }
     }
 
