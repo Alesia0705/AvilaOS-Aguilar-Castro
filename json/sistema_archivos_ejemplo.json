@@ -1,0 +1,72 @@
+{
+  "directories": [
+    {
+      "path": "/sistema",
+      "owner": "admin",
+      "permission": "PUBLICO"
+    },
+    {
+      "path": "/usuarios",
+      "owner": "admin",
+      "permission": "PUBLICO"
+    }
+  ],
+  "files": [
+    {
+      "path": "/sistema/config.sys",
+      "startBlock": 0,
+      "sizeBlocks": 4,
+      "owner": "admin",
+      "permission": "PUBLICO"
+    },
+    {
+      "path": "/usuarios/video.mp4",
+      "startBlock": 4,
+      "sizeBlocks": 8,
+      "owner": "usuario1",
+      "permission": "PUBLICO"
+    },
+    {
+      "path": "/usuarios/notas.txt",
+      "startBlock": 12,
+      "sizeBlocks": 3,
+      "owner": "usuario1",
+      "permission": "PUBLICO"
+    },
+    {
+      "path": "/usuarios/img1.png",
+      "startBlock": 15,
+      "sizeBlocks": 5,
+      "owner": "usuario1",
+      "permission": "PUBLICO"
+    },
+    {
+      "path": "/sistema/boot.bin",
+      "startBlock": 20,
+      "sizeBlocks": 6,
+      "owner": "admin",
+      "permission": "PUBLICO"
+    },
+    {
+      "path": "/usuarios/data.csv",
+      "startBlock": 26,
+      "sizeBlocks": 4,
+      "owner": "usuario1",
+      "permission": "PUBLICO"
+    },
+    {
+      "path": "/sistema/script.py",
+      "startBlock": 30,
+      "sizeBlocks": 3,
+      "owner": "admin",
+      "permission": "PUBLICO"
+    },
+    {
+      "path": "/sistema/core.dll",
+      "startBlock": 33,
+      "sizeBlocks": 5,
+      "owner": "admin",
+      "permission": "PUBLICO"
+    }
+  ]
+}
