@@ -63,6 +63,9 @@ public class VistaSimulacion extends JFrame {
     // Un panel por computador
     private PanelComputador[] paneles;
 
+    // Disco y archivos (null si el sistema no tiene disco conectado)
+    private PanelDisco panelDisco;
+
     // Buffers
     private final DefaultTableModel modeloBuffers = new DefaultTableModel(COLUMNAS_BUFFERS, 0);
 
@@ -176,6 +179,11 @@ public class VistaSimulacion extends JFrame {
             Computador c = sistema.getComputador(i + 1);
             paneles[i] = new PanelComputador(c);
             pestanas.addTab("Computador " + c.getId(), paneles[i]);
+        }
+
+        if (sistema.getDisco() != null && sistema.getSistemaArchivos() != null) {
+            panelDisco = new PanelDisco(sistema.getDisco(), sistema.getSistemaArchivos(), this::registrar);
+            pestanas.addTab("Disco y archivos", panelDisco);
         }
 
         JTable tablaBuffers = new JTable(modeloBuffers);
@@ -463,6 +471,9 @@ public class VistaSimulacion extends JFrame {
         }
         actualizarBuffers();
         actualizarMetricas(ciclo);
+        if (panelDisco != null) {
+            panelDisco.actualizar();
+        }
     }
 
     private static String formato(double valor, String patron) {
