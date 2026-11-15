@@ -7,6 +7,12 @@ import planificacion.PoliticaFCFS;
 import planificacion.PoliticaPlanificacion;
 import planificacion.PoliticaPrioridades;
 import planificacion.PoliticaRoundRobin;
+import disco.PoliticaCSCAN;
+import disco.PoliticaDisco;
+import disco.PoliticaFIFO;
+import disco.PoliticaSCAN;
+import disco.PoliticaSSTF;
+import modelo.enums.TipoPoliticaDisco;
 import util.GestorProcesosJson;
 
 /**
@@ -143,6 +149,24 @@ public final class FabricaSistema {
             proceso.setCantidadElementos(entero("Cantidad de elementos", elementos, 1, 10000));
         }
         return proceso;
+    }
+
+    /**
+     * Crea la política de planificación de disco del tipo indicado.
+     */
+    public static PoliticaDisco crearPoliticaDisco(TipoPoliticaDisco tipo) {
+        switch (tipo) {
+            case FIFO:
+                return new PoliticaFIFO();
+            case SSTF:
+                return new PoliticaSSTF();
+            case SCAN:
+                return new PoliticaSCAN(1);
+            case C_SCAN:
+                return new PoliticaCSCAN();
+            default:
+                throw new IllegalArgumentException("Política de disco desconocida: " + tipo);
+        }
     }
 
     /**
