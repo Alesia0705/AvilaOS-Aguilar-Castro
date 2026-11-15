@@ -60,10 +60,17 @@ public final class GestorArchivosJson {
 
         public final DatosDirectorio[] directorios;
         public final DatosArchivo[] archivos;
+        /** Tamaño del disco según diskConfig; -1 si el JSON no lo trae. */
+        public final int totalBloques;
+        /** Posición inicial del cabezal según diskConfig; -1 si el JSON no lo trae. */
+        public final int cabezalInicial;
 
-        DatosSistemaArchivos(DatosDirectorio[] directorios, DatosArchivo[] archivos) {
+        DatosSistemaArchivos(DatosDirectorio[] directorios, DatosArchivo[] archivos,
+                int totalBloques, int cabezalInicial) {
             this.directorios = directorios;
             this.archivos = archivos;
+            this.totalBloques = totalBloques;
+            this.cabezalInicial = cabezalInicial;
         }
     }
 
@@ -86,6 +93,9 @@ public final class GestorArchivosJson {
             throw new IllegalArgumentException("El archivo debe contener un objeto JSON con la lista \"files\".");
         }
         JsonObject objeto = raiz.getAsJsonObject();
+        if (objeto.has("fileSystem")) {
+            return cargarFormatoEnunciado(objeto);
+        }
 
         // Directorios (opcional: si no viene, se crean automaticamente al cargar los archivos)
         DatosDirectorio[] directorios = new DatosDirectorio[0];
@@ -117,7 +127,81 @@ public final class GestorArchivosJson {
             }
         }
 
-        return new DatosSistemaArchivos(directorios, archivos);
+        return new DatosSistemaArchivos(directorios, archivos, -1, -1);
+    }
+
+
+    /**
+     * Formato del enunciado: { "diskConfig": {totalBlocks, initialHead},
+     * "fileSystem": [ {path, type, owner, permissions, startBlock, blocks} ] }.
+     */
+    private static DatosSistemaArchivos cargarFormatoEnunciado(JsonObject objeto) {
+        JsonElement elemDisco = objeto.get("diskConfig");
+        if (elemDisco == null || !elemDisco.isJsonObject()) {
+            throw new IllegalArgumentException("Falta el objeto \"diskConfig\".");
+        }
+        JsonObject disco = elemDisco.getAsJsonObject();
+        int total = enteroObligatorio(disco, "totalBlocks", 1, 100000, "diskConfig");
+        int cabezal = enteroObligatorio(disco, "initialHead", 0, 100000, "diskConfig");
+        if (cabezal >= total) {
+            throw new IllegalArgumentException("diskConfig.initialHead (" + cabezal
+                    + ") debe ser menor que totalBlocks (" + total + ").");
+        }
+        JsonElement elemFs = objeto.get("fileSystem");
+        if (elemFs == null || !elemFs.isJsonArray()) {
+            throw new IllegalArgumentException("\"fileSystem\" debe ser un arreglo.");
+        }
+        JsonArray arr = elemFs.getAsJsonArray();
+        DatosDirectorio[] dirs = new DatosDirectorio[arr.size()];
+        DatosArchivo[] archs = new DatosArchivo[arr.size()];
+        int nd = 0;
+        int na = 0;
+        for (int i = 0; i < arr.size(); i++) {
+            String contexto = "fileSystem[" + (i + 1) + "]";
+            if (!arr.get(i).isJsonObject()) {
+                throw new IllegalArgumentException(contexto + " debe ser un objeto.");
+            }
+            JsonObject obj = arr.get(i).getAsJsonObject();
+            String ruta = textoObligatorio(obj, "path", contexto).trim();
+            if (!ruta.startsWith("/") || ruta.length() < 2) {
+                throw new IllegalArgumentException(contexto + ".path debe empezar con \"/\" (por ejemplo /sistema).");
+            }
+            String tipo = textoObligatorio(obj, "type", contexto).trim().toUpperCase();
+            String dueno = textoOpcional(obj, "owner", "admin");
+            Permiso permiso = leerPermiso(textoOpcional(obj, "permissions", "PUBLICO"), contexto);
+            for (int j = 0; j < nd; j++) {
+                if (dirs[j].ruta.equals(ruta)) {
+                    throw new IllegalArgumentException("La ruta \"" + ruta + "\" esta repetida.");
+                }
+            }
+            for (int j = 0; j < na; j++) {
+                if (archs[j].ruta.equals(ruta)) {
+                    throw new IllegalArgumentException("La ruta \"" + ruta + "\" esta repetida.");
+                }
+            }
+            if (tipo.equals("DIRECTORY")) {
+                dirs[nd++] = new DatosDirectorio(ruta, dueno, permiso);
+            } else if (tipo.equals("FILE")) {
+                int inicio = enteroObligatorio(obj, "startBlock", 0, 100000, contexto);
+                int bloques = enteroObligatorio(obj, "blocks", 1, 100000, contexto);
+                if (inicio + bloques > total) {
+                    throw new IllegalArgumentException(contexto + ": el archivo \"" + ruta
+                            + "\" no cabe en un disco de " + total + " bloques.");
+                }
+                archs[na++] = new DatosArchivo(ruta, inicio, bloques, dueno, permiso);
+            } else {
+                throw new IllegalArgumentException(contexto + ".type \"" + tipo + "\" no es valido (use FILE o DIRECTORY).");
+            }
+        }
+        DatosDirectorio[] dirsFinal = new DatosDirectorio[nd];
+        for (int i = 0; i < nd; i++) {
+            dirsFinal[i] = dirs[i];
+        }
+        DatosArchivo[] archsFinal = new DatosArchivo[na];
+        for (int i = 0; i < na; i++) {
+            archsFinal[i] = archs[i];
+        }
+        return new DatosSistemaArchivos(dirsFinal, archsFinal, total, cabezal);
     }
 
     /**
@@ -165,13 +249,16 @@ public final class GestorArchivosJson {
             throw new IllegalArgumentException("El sistema de archivos no puede ser null.");
         }
 
-        JsonArray arrDirectorios = new JsonArray();
-        JsonArray arrArchivos = new JsonArray();
-        recolectarNodos(sistema.getRaiz(), arrDirectorios, arrArchivos);
+        JsonArray arrFs = new JsonArray();
+        recolectarNodos(sistema.getRaiz(), arrFs);
+
+        JsonObject config = new JsonObject();
+        config.addProperty("totalBlocks", sistema.getDisco().getTotalBloques());
+        config.addProperty("initialHead", sistema.getDisco().getCabezal());
 
         JsonObject raiz = new JsonObject();
-        raiz.add("directories", arrDirectorios);
-        raiz.add("files", arrArchivos);
+        raiz.add("diskConfig", config);
+        raiz.add("fileSystem", arrFs);
 
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         try (Writer escritor = new FileWriter(rutaJson)) {
@@ -179,7 +266,7 @@ public final class GestorArchivosJson {
         }
     }
 
-    private static void recolectarNodos(NodoArchivo actual, JsonArray arrDirs, JsonArray arrFiles) {
+    private static void recolectarNodos(NodoArchivo actual, JsonArray arr) {
         if (actual == null) {
             return;
         }
@@ -187,22 +274,24 @@ public final class GestorArchivosJson {
             if (actual.getPadre() != null) {
                 JsonObject objDir = new JsonObject();
                 objDir.addProperty("path", actual.getRutaCompleta());
+                objDir.addProperty("type", "DIRECTORY");
                 objDir.addProperty("owner", actual.getDueno());
-                objDir.addProperty("permission", actual.getPermiso().name());
-                arrDirs.add(objDir);
+                objDir.addProperty("permissions", actual.getPermiso() == Permiso.PRIVADO ? "private" : "public");
+                arr.add(objDir);
             }
             NodoArchivo[] hijos = actual.getHijosArray();
             for (int i = 0; i < hijos.length; i++) {
-                recolectarNodos(hijos[i], arrDirs, arrFiles);
+                recolectarNodos(hijos[i], arr);
             }
         } else {
             JsonObject objFile = new JsonObject();
             objFile.addProperty("path", actual.getRutaCompleta());
+            objFile.addProperty("type", "FILE");
             objFile.addProperty("startBlock", actual.getPrimerBloque());
-            objFile.addProperty("sizeBlocks", actual.getTamanoBloques());
+            objFile.addProperty("blocks", actual.getTamanoBloques());
             objFile.addProperty("owner", actual.getDueno());
-            objFile.addProperty("permission", actual.getPermiso().name());
-            arrFiles.add(objFile);
+            objFile.addProperty("permissions", actual.getPermiso() == Permiso.PRIVADO ? "private" : "public");
+            arr.add(objFile);
         }
     }
 
