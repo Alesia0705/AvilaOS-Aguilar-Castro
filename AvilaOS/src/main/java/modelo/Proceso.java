@@ -63,6 +63,13 @@ public class Proceso {
     private int bloquesArchivo;
     private boolean solicitudEnviada;
 
+    // --- Planificador de mediano plazo (Proyecto 2) ---
+    // volatile: el kernel y el disco (hilos distintos) leen y escriben estos campos
+    private volatile boolean enMemoria = true;
+    private volatile int transitoSwap;      // 0 = ninguno, 1 = suspendiendose, 2 = reactivandose
+    private volatile int bloqueSwap = -1;   // primer bloque del swap donde esta guardado (-1 = ninguno)
+    private volatile int vecesSuspendido;
+
     /**
      * Constructor para instanciar un nuevo proceso desde la GUI.
      */
@@ -388,6 +395,56 @@ public class Proceso {
 
     public void setSolicitudEnviada(boolean solicitudEnviada) {
         this.solicitudEnviada = solicitudEnviada;
+    }
+
+    /** true si el proceso ocupa RAM (false mientras esta suspendido en swap). */
+    public boolean isEnMemoria() {
+        return enMemoria;
+    }
+
+    public void setEnMemoria(boolean enMemoria) {
+        this.enMemoria = enMemoria;
+    }
+
+    /** true si hay una suspension o reactivacion en curso (solicitud de swap en la cola del disco). */
+    public boolean isEnTransitoSwap() {
+        return transitoSwap != 0;
+    }
+
+    public boolean isSuspendiendo() {
+        return transitoSwap == 1;
+    }
+
+    public boolean isReactivando() {
+        return transitoSwap == 2;
+    }
+
+    public void marcarSuspendiendo() {
+        this.transitoSwap = 1;
+    }
+
+    public void marcarReactivando() {
+        this.transitoSwap = 2;
+    }
+
+    public void terminarTransitoSwap() {
+        this.transitoSwap = 0;
+    }
+
+    public int getBloqueSwap() {
+        return bloqueSwap;
+    }
+
+    public void setBloqueSwap(int bloqueSwap) {
+        this.bloqueSwap = bloqueSwap;
+    }
+
+    public int getVecesSuspendido() {
+        return vecesSuspendido;
+    }
+
+    public void incrementarVecesSuspendido() {
+        this.vecesSuspendido++;
     }
 
     @Override
