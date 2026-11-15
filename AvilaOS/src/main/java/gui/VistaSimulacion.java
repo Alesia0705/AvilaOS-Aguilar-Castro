@@ -63,6 +63,9 @@ public class VistaSimulacion extends JFrame {
     // Un panel por computador
     private PanelComputador[] paneles;
 
+    // Disco y archivos (null si el sistema no tiene disco conectado)
+    private PanelDisco panelDisco;
+
     // Buffers
     private final DefaultTableModel modeloBuffers = new DefaultTableModel(COLUMNAS_BUFFERS, 0);
 
@@ -178,6 +181,11 @@ public class VistaSimulacion extends JFrame {
             pestanas.addTab("Computador " + c.getId(), paneles[i]);
         }
 
+        if (sistema.getDisco() != null && sistema.getSistemaArchivos() != null) {
+            panelDisco = new PanelDisco(sistema.getDisco(), sistema.getSistemaArchivos(), this::registrar);
+            pestanas.addTab("Disco y archivos", panelDisco);
+        }
+
         JTable tablaBuffers = new JTable(modeloBuffers);
         pestanas.addTab("Buffers y semáforos", new JScrollPane(tablaBuffers));
         pestanas.addTab("Métricas", construirPanelMetricas());
@@ -244,8 +252,17 @@ public class VistaSimulacion extends JFrame {
         JTabbedPane pestanasGraficas = new JTabbedPane();
         pestanasGraficas.addTab("Utilización de CPU", panelUtilizacion);
         pestanasGraficas.addTab("Throughput, tasa de éxito y espera", panelRendimiento);
-        pestanasGraficas.setPreferredSize(new Dimension(1100, 230));
-        add(pestanasGraficas, BorderLayout.SOUTH);
+        pestanasGraficas.setPreferredSize(new Dimension(1100, 200));
+        pestanasGraficas.setMinimumSize(new Dimension(300, 90));
+
+        // La zona central y las gráficas se separan con un divisor que se puede arrastrar
+        // para dar más espacio al disco (o a las gráficas) según lo que se quiera ver.
+        Component centro = ((BorderLayout) getContentPane().getLayout()).getLayoutComponent(BorderLayout.CENTER);
+        remove(centro);
+        JSplitPane vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, centro, pestanasGraficas);
+        vertical.setResizeWeight(1.0);
+        vertical.setContinuousLayout(true);
+        add(vertical, BorderLayout.CENTER);
     }
 
     private ChartPanel crearGraficaSerie(XYSeries serie, String titulo, String ejeY, boolean porcentaje) {
@@ -463,6 +480,9 @@ public class VistaSimulacion extends JFrame {
         }
         actualizarBuffers();
         actualizarMetricas(ciclo);
+        if (panelDisco != null) {
+            panelDisco.actualizar();
+        }
     }
 
     private static String formato(double valor, String patron) {
