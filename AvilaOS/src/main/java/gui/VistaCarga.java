@@ -1,20 +1,19 @@
 package gui;
 
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
+import disco.Disco;
+import filesystem.SistemaArchivos;
 import modelo.Proceso;
+import modelo.enums.TipoPoliticaDisco;
 import reloj.RelojGlobal;
 import sistema.SistemaDistribuido;
+import util.GestorArchivosJson;
 import util.GestorProcesosJson;
 import util.LogEventos;
 
 import javax.swing.*;
 import java.awt.*;
 import java.io.File;
-import java.io.FileReader;
 import java.io.IOException;
-import java.io.Reader;
 
 /**
  * Vista 1 del Proyecto 2: carga los dos archivos JSON obligatorios (procesos y
@@ -30,7 +29,8 @@ public class VistaCarga extends JFrame {
     private JButton btnIniciar;
 
     private GestorProcesosJson.Configuracion config;
-    private String rutaSistemaArchivos;
+    private GestorArchivosJson.DatosSistemaArchivos datosArchivos;
+    private JComboBox<TipoPoliticaDisco> cmbPoliticaDisco;
 
     public VistaCarga() {
         setTitle("ÁvilaOS - Carga de configuración (Vista 1)");
@@ -42,7 +42,7 @@ public class VistaCarga extends JFrame {
     }
 
     private void initUI() {
-        JPanel archivos = new JPanel(new GridLayout(2, 2, 10, 10));
+        JPanel archivos = new JPanel(new GridLayout(3, 2, 10, 10));
         archivos.setBorder(BorderFactory.createTitledBorder("Archivos obligatorios (JSON)"));
         JButton btnProcesos = new JButton("Cargar procesos (JSON)");
         btnProcesos.addActionListener(e -> cargarProcesos());
@@ -56,6 +56,9 @@ public class VistaCarga extends JFrame {
         archivos.add(lblProcesos);
         archivos.add(btnArchivos);
         archivos.add(lblArchivos);
+        cmbPoliticaDisco = new JComboBox<>(TipoPoliticaDisco.values());
+        archivos.add(new JLabel("Política de disco inicial:"));
+        archivos.add(cmbPoliticaDisco);
         add(archivos, BorderLayout.NORTH);
 
         txtResumen = new JTextArea();
@@ -106,43 +109,42 @@ public class VistaCarga extends JFrame {
     }
 
     /**
-     * Por ahora solo comprueba que el JSON tenga diskConfig y fileSystem. El
-     * sistema de archivos real lo carga el módulo de archivos (#56) usando la
-     * ruta guardada en rutaSistemaArchivos.
+     * Valida el JSON del sistema de archivos (formato del enunciado). El disco
+     * y el árbol se crean al iniciar la simulación.
      */
     private void cargarSistemaArchivos() {
         File archivo = elegirJson("Cargar sistema de archivos (JSON)");
         if (archivo == null) {
             return;
         }
-        try (Reader lector = new FileReader(archivo)) {
-            JsonElement raiz = JsonParser.parseReader(lector);
-            if (!raiz.isJsonObject()) {
-                throw new IllegalArgumentException("La raíz del archivo debe ser un objeto JSON.");
+        try {
+            GestorArchivosJson.DatosSistemaArchivos datos = GestorArchivosJson.cargar(archivo.getPath());
+            if (datos.totalBloques < 1) {
+                throw new IllegalArgumentException("Falta \"diskConfig\" con totalBlocks e initialHead.");
             }
-            JsonObject obj = raiz.getAsJsonObject();
-            if (!obj.has("diskConfig") || !obj.get("diskConfig").isJsonObject()) {
-                throw new IllegalArgumentException("Falta el objeto \"diskConfig\".");
+            if (datos.totalBloques < 100 || datos.totalBloques > 500) {
+                throw new IllegalArgumentException("totalBlocks debe estar entre 100 y 500 (trae "
+                        + datos.totalBloques + ").");
             }
-            if (!obj.has("fileSystem") || !obj.get("fileSystem").isJsonArray()) {
-                throw new IllegalArgumentException("Falta el arreglo \"fileSystem\".");
-            }
-            rutaSistemaArchivos = archivo.getPath();
-            lblArchivos.setText(archivo.getName() + " (" + obj.getAsJsonArray("fileSystem").size()
-                    + " entradas)");
+            datosArchivos = datos;
+            lblArchivos.setText(archivo.getName() + " (" + datos.archivos.length + " archivos, "
+                    + datos.directorios.length + " directorios, disco de " + datos.totalBloques + ")");
             lblArchivos.setForeground(new Color(0, 130, 0));
-        } catch (RuntimeException | IOException ex) {
-            rutaSistemaArchivos = null;
+        } catch (IllegalArgumentException | IOException ex) {
+            datosArchivos = null;
             lblArchivos.setText("Sin cargar");
             lblArchivos.setForeground(new Color(180, 0, 0));
-            JOptionPane.showMessageDialog(this, "Archivo de sistema de archivos inválido: " + ex.getMessage(),
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, ex.getMessage(), "Archivo de sistema de archivos inválido",
+                    JOptionPane.ERROR_MESSAGE);
         }
         actualizar();
     }
 
     private void actualizar() {
-        btnIniciar.setEnabled(config != null && rutaSistemaArchivos != null);
+        btnIniciar.setEnabled(config != null && datosArchivos != null);
+        if (config != null) {
+            cmbPoliticaDisco.setSelectedItem(config.politicaDisco);
+        }
         if (config == null) {
             return;
         }
@@ -163,7 +165,7 @@ public class VistaCarga extends JFrame {
     }
 
     private void iniciarSimulacion() {
-        if (config == null || rutaSistemaArchivos == null) {
+        if (config == null || datosArchivos == null) {
             JOptionPane.showMessageDialog(this, "Debes cargar los dos archivos JSON antes de iniciar.",
                     "Faltan archivos", JOptionPane.WARNING_MESSAGE);
             return;
@@ -173,6 +175,14 @@ public class VistaCarga extends JFrame {
             SistemaDistribuido sistema = new SistemaDistribuido(1, reloj);
             LogEventos log = new LogEventos(5000);
             sistema.setLogEventos(log);
+
+            // Disco: el swap se reserva DESPUÉS de cargar los archivos, sobre bloques libres
+            Disco disco = new Disco(datosArchivos.totalBloques, 0, datosArchivos.cabezalInicial,
+                    FabricaSistema.crearPoliticaDisco((TipoPoliticaDisco) cmbPoliticaDisco.getSelectedItem()));
+            SistemaArchivos fs = new SistemaArchivos(disco);
+            GestorArchivosJson.aplicar(datosArchivos, fs);
+            disco.configurarSwap(config.bloquesSwap);
+            sistema.conectarDisco(disco, fs);
 
             sistema.agregarComputador(config.ramComputador,
                     FabricaSistema.crearPolitica(config.politicaCpu, config.quantum));
@@ -185,8 +195,9 @@ public class VistaCarga extends JFrame {
                 }
             }
 
-            log.registrar(0L, "Sistema configurado: 1 computador, " + config.procesos.length + " procesos.");
-            // TODO #56: cargar aquí el sistema de archivos desde rutaSistemaArchivos.
+            log.registrar(0L, "Sistema configurado: 1 computador, " + config.procesos.length + " procesos, disco de "
+                    + disco.getTotalBloques() + " bloques (swap " + disco.getBloquesSwap() + ", cabezal en "
+                    + disco.getCabezal() + ", política " + cmbPoliticaDisco.getSelectedItem() + ").");
 
             VistaSimulacion vista2 = new VistaSimulacion(reloj, sistema);
             vista2.setLogEventos(log);
