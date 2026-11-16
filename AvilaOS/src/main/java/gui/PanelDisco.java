@@ -81,9 +81,13 @@ public class PanelDisco extends JPanel {
         spnVelocidad.setToolTipText("Bloques que recorre el cabezal por ciclo de reloj");
         JButton btnVelocidad = new JButton("Aplicar velocidad");
         btnVelocidad.addActionListener(e -> cambiarVelocidad());
-        selector.add(new JLabel("   Velocidad del cabezal (bloques/ciclo):"));
-        selector.add(spnVelocidad);
-        selector.add(btnVelocidad);
+        JPanel cabezal = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
+        cabezal.add(new JLabel("Velocidad del cabezal (bloques/ciclo):"));
+        cabezal.add(spnVelocidad);
+        cabezal.add(btnVelocidad);
+        JPanel controles = new JPanel(new GridLayout(2, 1));
+        controles.add(selector);
+        controles.add(cabezal);
 
         JPanel info = new JPanel(new GridLayout(2, 1));
         lblInfo.setFont(lblInfo.getFont().deriveFont(Font.BOLD));
@@ -91,7 +95,7 @@ public class PanelDisco extends JPanel {
         info.add(lblCola);
 
         JPanel norte = new JPanel(new BorderLayout());
-        norte.add(selector, BorderLayout.NORTH);
+        norte.add(controles, BorderLayout.NORTH);
         norte.add(info, BorderLayout.CENTER);
         return norte;
     }
