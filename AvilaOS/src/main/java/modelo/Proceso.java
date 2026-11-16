@@ -3,6 +3,7 @@ package modelo;
 import modelo.enums.EstadoProceso;
 import modelo.enums.TipoProceso;
 import modelo.enums.MotivoBloqueo;
+import modelo.enums.ModoUsuario;
 import modelo.enums.TipoOperacion;
 
 /**
@@ -62,6 +63,9 @@ public class Proceso {
     private String rutaArchivo;
     private int bloquesArchivo;
     private boolean solicitudEnviada;
+    // modo y usuario con los que se creo el proceso: con esa identidad pide la operacion al disco
+    private ModoUsuario modoSolicitante;
+    private String usuarioSolicitante;
 
     // --- Planificador de mediano plazo (Proyecto 2) ---
     // volatile: el kernel y el disco (hilos distintos) leen y escriben estos campos
@@ -395,6 +399,22 @@ public class Proceso {
 
     public void setSolicitudEnviada(boolean solicitudEnviada) {
         this.solicitudEnviada = solicitudEnviada;
+    }
+
+    public ModoUsuario getModoSolicitante() {
+        return modoSolicitante;
+    }
+
+    public void setModoSolicitante(ModoUsuario modoSolicitante) {
+        this.modoSolicitante = modoSolicitante;
+    }
+
+    public String getUsuarioSolicitante() {
+        return usuarioSolicitante;
+    }
+
+    public void setUsuarioSolicitante(String usuarioSolicitante) {
+        this.usuarioSolicitante = usuarioSolicitante;
     }
 
     /** true si el proceso ocupa RAM (false mientras esta suspendido en swap). */
