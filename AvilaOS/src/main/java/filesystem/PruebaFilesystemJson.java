@@ -24,10 +24,11 @@ public class PruebaFilesystemJson {
         System.out.println("   Bloques libres tras carga: " + disco.contarBloquesLibres(false) + " (esperado: 362)");
 
         // 2. Prueba Issue #56: CRUD + Permisos (USUARIO vs ADMINISTRADOR)
+        // Los directorios los crea el administrador; el usuario crea archivos solo dentro de los suyos
+        fs.crearDirectorio("/usuarios/secreto", "usuario1", Permiso.PRIVADO, ModoUsuario.ADMINISTRADOR, "admin");
         fs.setUsuarioActual("usuario1");
         fs.setModoActual(ModoUsuario.USUARIO);
 
-        fs.crearDirectorio("/usuarios/secreto", Permiso.PRIVADO);
         NodoArchivo archivoPrivado = fs.crearArchivo("/usuarios/secreto/clave.txt", 4, Permiso.PRIVADO);
         System.out.println("2. Creado archivo privado en bloque inicial: " + archivoPrivado.getPrimerBloque());
 

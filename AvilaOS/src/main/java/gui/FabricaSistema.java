@@ -1,6 +1,8 @@
 package gui;
 
 import modelo.Proceso;
+import modelo.enums.ModoUsuario;
+import modelo.enums.TipoOperacion;
 import modelo.enums.TipoProceso;
 import planificacion.PoliticaEDF;
 import planificacion.PoliticaFCFS;
@@ -148,6 +150,44 @@ public final class FabricaSistema {
             proceso.setCiclosProdCons(entero("Ciclos de trabajo por elemento", ciclosProdCons, 1, 1000));
             proceso.setCantidadElementos(entero("Cantidad de elementos", elementos, 1, 10000));
         }
+        return proceso;
+    }
+
+    /**
+     * Valida los datos escritos en la interfaz y crea un proceso de E/S de
+     * archivo. El proceso recuerda el modo y usuario con los que se creo: con
+     * esa identidad pedira la operacion al disco.
+     */
+    public static Proceso crearProcesoArchivo(String nombre, TipoOperacion operacion, String ruta,
+            Object bloques, Object ram, Object deadline, Object instrucciones, int ramComputador,
+            ModoUsuario modo, String usuario) {
+        String nombreValido = texto("Nombre", nombre, 30);
+        if (operacion == null) {
+            throw new IllegalArgumentException("Elige una operación.");
+        }
+        String rutaValida = texto("Ruta del archivo", ruta, 200);
+        if (!rutaValida.startsWith("/")) {
+            throw new IllegalArgumentException("La ruta debe empezar con \"/\" (por ejemplo /usuarios/notas.txt).");
+        }
+        int bloquesArchivo = 0;
+        if (operacion == TipoOperacion.CREAR) {
+            bloquesArchivo = entero("Tamaño del archivo (bloques)", bloques, 1, 10000);
+        } else if (operacion == TipoOperacion.ACTUALIZAR) {
+            bloquesArchivo = entero("Nuevo tamaño en bloques (0 = conservar)", bloques, 0, 10000);
+        }
+        int instr = entero("Instrucciones (mínimo 2: la operación y al menos una más)", instrucciones, 2, 100000);
+        int memoria = entero("RAM del proceso", ram, 1, 1000000);
+        if (memoria > ramComputador) {
+            throw new IllegalArgumentException("El proceso \"" + nombreValido + "\" pide " + memoria
+                    + " de RAM, pero el computador solo tiene " + ramComputador + ".");
+        }
+        int dead = entero("Deadline (ciclos)", deadline, 1, 1000000);
+        Proceso proceso = new Proceso(nombreValido, instr, memoria, 1, dead, TipoProceso.ES_ARCHIVO, 1);
+        proceso.setOperacion(operacion);
+        proceso.setRutaArchivo(rutaValida);
+        proceso.setBloquesArchivo(bloquesArchivo);
+        proceso.setModoSolicitante(modo);
+        proceso.setUsuarioSolicitante(usuario);
         return proceso;
     }
 

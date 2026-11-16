@@ -6,6 +6,7 @@ import disco.SolicitudDisco;
 import filesystem.NodoArchivo;
 import filesystem.SistemaArchivos;
 import modelo.Proceso;
+import modelo.enums.ModoUsuario;
 import modelo.enums.Permiso;
 import modelo.enums.TipoOperacion;
 import planificacion.PoliticaPlanificacion;
@@ -15,6 +16,7 @@ import kernel.ServicioSistema;
 import hardware.Cpu;
 import kernel.Kernel;
 import util.LogEventos;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster, el
@@ -304,21 +306,34 @@ public class SistemaDistribuido implements ServicioSistema {
             return false;
         }
 
+        // El proceso pide la operacion con la identidad con la que fue creado (si no la trae, la de la sesion)
+        ModoUsuario modo = (proceso.getModoSolicitante() != null) ? proceso.getModoSolicitante() : fs.getModoActual();
+        String usuario = (proceso.getUsuarioSolicitante() != null) ? proceso.getUsuarioSolicitante()
+                : fs.getUsuarioActual();
+        String motivo = fs.verificarPermiso(op, ruta, modo, usuario);
+        if (motivo != null) {
+            notificarRechazo(ciclo, proceso.getNombre() + " (" + descripcionIdentidad(modo, usuario) + ") no puede "
+                    + op + " " + ruta + ": " + motivo);
+            return false;
+        }
+
         int bloqueObjetivo;
         int cantidadBloques = 1;
         switch (op) {
             case CREAR -> {
-                NodoArchivo creado = fs.crearArchivo(ruta, proceso.getBloquesArchivo(), Permiso.PUBLICO);
+                NodoArchivo creado = fs.crearArchivo(ruta, proceso.getBloquesArchivo(), usuario, Permiso.PUBLICO,
+                        modo, usuario);
                 if (creado == null) {
                     registrarEvento(ciclo, "Error al crear " + ruta + " para " + proceso.getNombre()
                             + " (sin espacio, ruta inválida o sin permiso).");
                     return false;
                 }
+                creado.setCreadoPor(proceso.getNombre());
                 bloqueObjetivo = creado.getPrimerBloque();
                 cantidadBloques = creado.getTamanoBloques();
             }
             case LEER -> {
-                NodoArchivo nodo = fs.leerArchivo(ruta, fs.getModoActual(), fs.getUsuarioActual());
+                NodoArchivo nodo = fs.leerArchivo(ruta, modo, usuario);
                 if (nodo == null) {
                     registrarEvento(ciclo, "Error al leer " + ruta + " para " + proceso.getNombre()
                             + " (no existe o acceso denegado).");
@@ -328,7 +343,7 @@ public class SistemaDistribuido implements ServicioSistema {
                 cantidadBloques = Math.max(1, nodo.getTamanoBloques());
             }
             case ACTUALIZAR -> {
-                NodoArchivo nodo = fs.leerArchivo(ruta, fs.getModoActual(), fs.getUsuarioActual());
+                NodoArchivo nodo = fs.leerArchivo(ruta, modo, usuario);
                 if (nodo == null) {
                     registrarEvento(ciclo, "Error al actualizar " + ruta + " para " + proceso.getNombre()
                             + " (no existe o acceso denegado).");
@@ -336,7 +351,7 @@ public class SistemaDistribuido implements ServicioSistema {
                 }
                 int nuevosBloques = proceso.getBloquesArchivo();
                 if (nuevosBloques > 0 && nuevosBloques != nodo.getTamanoBloques()) {
-                    if (!fs.actualizar(ruta, null, nuevosBloques, null, fs.getModoActual(), fs.getUsuarioActual())) {
+                    if (!fs.actualizar(ruta, null, nuevosBloques, null, modo, usuario)) {
                         registrarEvento(ciclo, "Error al redimensionar " + ruta + " para " + proceso.getNombre() + ".");
                         return false;
                     }
@@ -352,7 +367,7 @@ public class SistemaDistribuido implements ServicioSistema {
                     return false;
                 }
                 int bloqueAntes = nodo.isEsDirectorio() ? 0 : nodo.getPrimerBloque();
-                if (!fs.eliminar(ruta)) {
+                if (!fs.eliminar(ruta, modo, usuario)) {
                     registrarEvento(ciclo, "Acceso denegado al eliminar " + ruta + " para " + proceso.getNombre() + ".");
                     return false;
                 }
@@ -372,6 +387,27 @@ public class SistemaDistribuido implements ServicioSistema {
         registrarEvento(ciclo, "Proceso " + proceso.getNombre() + " solicita " + op
                 + " en " + ruta + " (bloque " + bloqueObjetivo + ").");
         return true;
+    }
+
+    // Operaciones de archivo rechazadas por permisos (para las metricas)
+    private final AtomicInteger rechazos = new AtomicInteger();
+
+    private static String descripcionIdentidad(ModoUsuario modo, String usuario) {
+        return (modo == ModoUsuario.ADMINISTRADOR) ? "modo administrador" : "modo usuario " + usuario;
+    }
+
+    /**
+     * Anota una operacion de archivo rechazada (con su explicacion) en el log y la cuenta.
+     * La simulacion sigue: solo se rechaza esa operacion.
+     */
+    public void notificarRechazo(long ciclo, String descripcion) {
+        rechazos.incrementAndGet();
+        registrarEvento(ciclo, "Operación rechazada: " + descripcion);
+    }
+
+    /** Cantidad de operaciones de archivo rechazadas por permisos. */
+    public int getRechazos() {
+        return rechazos.get();
     }
 
     @Override

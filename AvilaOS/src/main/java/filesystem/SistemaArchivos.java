@@ -4,6 +4,7 @@ import disco.Disco;
 import java.util.concurrent.Semaphore;
 import modelo.enums.ModoUsuario;
 import modelo.enums.Permiso;
+import modelo.enums.TipoOperacion;
 import util.ListaEnlazada;
 
 /**
@@ -86,6 +87,126 @@ public class SistemaArchivos {
         return true;
     }
 
+    /**
+     * Decide si el solicitante puede hacer la operacion sobre la ruta segun las
+     * reglas de los dos modos de uso:
+     * - ADMINISTRADOR: todas las operaciones.
+     * - USUARIO: lee archivos propios o publicos; crea archivos solo dentro de
+     *   sus propios directorios; modifica o elimina solo lo que es suyo.
+     *
+     * @return null si se permite, o el motivo del rechazo listo para mostrar al usuario
+     */
+    public String verificarPermiso(TipoOperacion operacion, String ruta, ModoUsuario modo, String usuario) {
+        adquirir();
+        try {
+            return verificarInterno(operacion, ruta, modo, usuario);
+        } finally {
+            mutex.release();
+        }
+    }
+
+    private String verificarInterno(TipoOperacion operacion, String ruta, ModoUsuario modo, String usuario) {
+        if (operacion == null) {
+            return "no se indicó la operación.";
+        }
+        String limpia = normalizarRuta(ruta);
+        if (limpia == null) {
+            return "la ruta \"" + ruta + "\" no es válida (debe empezar con \"/\", por ejemplo /usuarios/notas.txt).";
+        }
+        boolean admin = (modo == ModoUsuario.ADMINISTRADOR);
+        String quien = admin ? "el administrador" : "el usuario " + usuario;
+
+        if (operacion == TipoOperacion.CREAR) {
+            if ("/".equals(limpia)) {
+                return "no se puede crear la raíz del sistema de archivos.";
+            }
+            String rutaPadre = obtenerRutaPadre(limpia);
+            NodoArchivo padre = buscarNodoInterno(rutaPadre);
+            if (padre == null || !padre.isEsDirectorio()) {
+                return "el directorio \"" + rutaPadre + "\" no existe.";
+            }
+            if (padre.buscarHijo(obtenerNombreFinal(limpia)) != null) {
+                return "\"" + limpia + "\" ya existe.";
+            }
+            if (!admin) {
+                String privado = motivoAccesoEnRuta(padre, modo, usuario);
+                if (privado != null) {
+                    return privado;
+                }
+                if (!padre.getDueno().equalsIgnoreCase(usuario)) {
+                    return "en modo usuario solo se pueden crear archivos dentro de los directorios propios, y \""
+                            + rutaPadre + "\" pertenece a " + padre.getDueno() + ".";
+                }
+            }
+            return null;
+        }
+
+        NodoArchivo nodo = buscarNodoInterno(limpia);
+        if (nodo == null) {
+            return "\"" + limpia + "\" no existe.";
+        }
+        if (operacion == TipoOperacion.LEER) {
+            if (nodo.isEsDirectorio()) {
+                return "\"" + limpia + "\" es un directorio, no un archivo.";
+            }
+            return admin ? null : motivoAccesoEnRuta(nodo, modo, usuario);
+        }
+        if (operacion == TipoOperacion.ACTUALIZAR || operacion == TipoOperacion.ELIMINAR) {
+            if (nodo == raiz) {
+                return "no se puede modificar la raíz del sistema de archivos.";
+            }
+            if (admin) {
+                return null;
+            }
+            String privado = motivoAccesoEnRuta(nodo, modo, usuario);
+            if (privado != null) {
+                return privado;
+            }
+            if (!nodo.getDueno().equalsIgnoreCase(usuario)) {
+                return "en modo usuario no se pueden modificar archivos del sistema ni de otros usuarios, y \""
+                        + limpia + "\" pertenece a " + nodo.getDueno() + ".";
+            }
+            if (operacion == TipoOperacion.ELIMINAR && nodo.isEsDirectorio()) {
+                NodoArchivo ajeno = primerNodoAjeno(nodo, usuario);
+                if (ajeno != null) {
+                    return "el directorio contiene \"" + ajeno.getRutaCompleta() + "\", que pertenece a "
+                            + ajeno.getDueno() + ".";
+                }
+            }
+            return null;
+        }
+        return "la operación " + operacion + " no es una operación de archivo.";
+    }
+
+    /** Explica que nodo de la ruta (si lo hay) es privado de otro usuario; null si tiene acceso. */
+    private String motivoAccesoEnRuta(NodoArchivo nodo, ModoUsuario modo, String usuario) {
+        NodoArchivo actual = nodo;
+        while (actual != null) {
+            if (!tieneAcceso(actual, modo, usuario)) {
+                return "\"" + actual.getRutaCompleta() + "\" es privado y pertenece a " + actual.getDueno()
+                        + "; en modo usuario solo se acceden los archivos propios o públicos.";
+            }
+            actual = actual.getPadre();
+        }
+        return null;
+    }
+
+    private NodoArchivo primerNodoAjeno(NodoArchivo nodo, String usuario) {
+        NodoArchivo[] hijos = nodo.getHijosArray();
+        for (int i = 0; i < hijos.length; i++) {
+            if (!hijos[i].getDueno().equalsIgnoreCase(usuario)) {
+                return hijos[i];
+            }
+            if (hijos[i].isEsDirectorio()) {
+                NodoArchivo ajeno = primerNodoAjeno(hijos[i], usuario);
+                if (ajeno != null) {
+                    return ajeno;
+                }
+            }
+        }
+        return null;
+    }
+
     // ==================== BUSQUEDA Y RESOLUCION DE RUTAS ====================
 
     public NodoArchivo getRaiz() {
@@ -141,6 +262,9 @@ public class SistemaArchivos {
      */
     public NodoArchivo crearDirectorio(String ruta, String dueno, Permiso permiso,
             ModoUsuario modo, String solicitante) {
+        if (modo != ModoUsuario.ADMINISTRADOR) {
+            return null;   // los directorios solo los crea el administrador
+        }
         adquirir();
         try {
             String limpia = normalizarRuta(ruta);
@@ -190,6 +314,9 @@ public class SistemaArchivos {
         }
         adquirir();
         try {
+            if (verificarInterno(TipoOperacion.CREAR, ruta, modo, solicitante) != null) {
+                return null;
+            }
             String limpia = normalizarRuta(ruta);
             if (limpia == null || "/".equals(limpia)) {
                 return null;
@@ -299,6 +426,9 @@ public class SistemaArchivos {
             ModoUsuario modo, String solicitante) {
         adquirir();
         try {
+            if (verificarInterno(TipoOperacion.ACTUALIZAR, ruta, modo, solicitante) != null) {
+                return false;
+            }
             NodoArchivo nodo = buscarNodoInterno(ruta);
             if (nodo == null || nodo == raiz) {
                 return false;
@@ -360,6 +490,9 @@ public class SistemaArchivos {
     public boolean eliminar(String ruta, ModoUsuario modo, String solicitante) {
         adquirir();
         try {
+            if (verificarInterno(TipoOperacion.ELIMINAR, ruta, modo, solicitante) != null) {
+                return false;
+            }
             NodoArchivo nodo = buscarNodoInterno(ruta);
             if (nodo == null || nodo == raiz) {
                 return false;

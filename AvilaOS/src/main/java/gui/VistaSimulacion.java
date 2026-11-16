@@ -65,6 +65,7 @@ public class VistaSimulacion extends JFrame {
 
     // Disco y archivos (null si el sistema no tiene disco conectado)
     private PanelDisco panelDisco;
+    private final PanelModoUsuario panelModo = new PanelModoUsuario();
 
     // Buffers
     private final DefaultTableModel modeloBuffers = new DefaultTableModel(COLUMNAS_BUFFERS, 0);
@@ -146,6 +147,13 @@ public class VistaSimulacion extends JFrame {
         btnBuffer.addActionListener(e -> bufferAlVuelo());
         fila2.add(btnProceso);
         fila2.add(btnBuffer);
+        if (sistema.getSistemaArchivos() != null) {
+            JButton btnArchivo = new JButton("+ Proceso de E/S (archivo)");
+            btnArchivo.addActionListener(e -> procesoArchivoAlVuelo());
+            fila2.add(btnArchivo);
+            panelModo.conectar(sistema.getSistemaArchivos(), this::registrar);
+            fila2.add(panelModo);
+        }
 
         JPanel panel = new JPanel(new GridLayout(2, 1));
         panel.add(fila1);
@@ -352,6 +360,22 @@ public class VistaSimulacion extends JFrame {
             numeros[i] = String.valueOf(i + 1);
         }
         return numeros;
+    }
+
+    private void procesoArchivoAlVuelo() {
+        int ram = sistema.getComputador(1).getKernel().getMemoria().getCapacidadTotal();
+        Proceso p = DialogoProcesoArchivo.mostrar(this, sistema.getSistemaArchivos(), ram,
+                sistema.getTodosLosProcesos().length + 1);
+        if (p == null) {
+            return;
+        }
+        if (!sistema.enviarProceso(p)) {
+            JOptionPane.showMessageDialog(this, "No se pudo enviar el proceso al computador.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        registrar("Proceso de E/S " + p.getNombre() + " (" + p.getOperacion() + " " + p.getRutaArchivo()
+                + ") creado por " + p.getUsuarioSolicitante() + ".");
     }
 
     private void procesoAlVuelo() {

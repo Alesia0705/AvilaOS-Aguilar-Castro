@@ -31,6 +31,7 @@ public class VistaCarga extends JFrame {
     private GestorProcesosJson.Configuracion config;
     private GestorArchivosJson.DatosSistemaArchivos datosArchivos;
     private JComboBox<TipoPoliticaDisco> cmbPoliticaDisco;
+    private final PanelModoUsuario panelModo = new PanelModoUsuario();
 
     public VistaCarga() {
         setTitle("ÁvilaOS - Carga de configuración (Vista 1)");
@@ -42,7 +43,7 @@ public class VistaCarga extends JFrame {
     }
 
     private void initUI() {
-        JPanel archivos = new JPanel(new GridLayout(3, 2, 10, 10));
+        JPanel archivos = new JPanel(new GridLayout(4, 2, 10, 10));
         archivos.setBorder(BorderFactory.createTitledBorder("Archivos obligatorios (JSON)"));
         JButton btnProcesos = new JButton("Cargar procesos (JSON)");
         btnProcesos.addActionListener(e -> cargarProcesos());
@@ -59,6 +60,8 @@ public class VistaCarga extends JFrame {
         cmbPoliticaDisco = new JComboBox<>(TipoPoliticaDisco.values());
         archivos.add(new JLabel("Política de disco inicial:"));
         archivos.add(cmbPoliticaDisco);
+        archivos.add(new JLabel("Modo de operación inicial:"));
+        archivos.add(panelModo);
         add(archivos, BorderLayout.NORTH);
 
         txtResumen = new JTextArea();
@@ -182,6 +185,8 @@ public class VistaCarga extends JFrame {
             SistemaArchivos fs = new SistemaArchivos(disco);
             GestorArchivosJson.aplicar(datosArchivos, fs);
             disco.configurarSwap(config.bloquesSwap);
+            fs.setModoActual(panelModo.getModo());
+            fs.setUsuarioActual(panelModo.getUsuario());
             sistema.conectarDisco(disco, fs);
 
             sistema.agregarComputador(config.ramComputador,
@@ -189,6 +194,8 @@ public class VistaCarga extends JFrame {
 
             for (int i = 0; i < config.procesos.length; i++) {
                 Proceso p = FabricaSistema.crearProcesoArchivo(config.procesos[i], config.ramComputador);
+                p.setModoSolicitante(panelModo.getModo());
+                p.setUsuarioSolicitante(panelModo.getUsuario());
                 if (!sistema.enviarProceso(p)) {
                     throw new IllegalArgumentException("No se pudo enviar el proceso \"" + p.getNombre()
                             + "\" al computador.");
@@ -197,7 +204,8 @@ public class VistaCarga extends JFrame {
 
             log.registrar(0L, "Sistema configurado: 1 computador, " + config.procesos.length + " procesos, disco de "
                     + disco.getTotalBloques() + " bloques (swap " + disco.getBloquesSwap() + ", cabezal en "
-                    + disco.getCabezal() + ", política " + cmbPoliticaDisco.getSelectedItem() + ").");
+                    + disco.getCabezal() + ", política " + cmbPoliticaDisco.getSelectedItem() + ", modo "
+                    + panelModo.getModo() + ").");
 
             VistaSimulacion vista2 = new VistaSimulacion(reloj, sistema);
             vista2.setLogEventos(log);
