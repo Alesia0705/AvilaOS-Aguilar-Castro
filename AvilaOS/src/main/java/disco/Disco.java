@@ -19,7 +19,7 @@ public class Disco implements EscuchaReloj {
 
     private int cabezal;
     private int direccion; // 1 hacia bloques mayores, -1 hacia menores
-    private int velocidadCabezal; // posiciones que recorre el cabezal por ciclo
+    private volatile int velocidadCabezal; // posiciones que recorre el cabezal por ciclo
 
     private final ListaEnlazada<SolicitudDisco> colaSolicitudes;
     private final Semaphore mutexCola;
@@ -436,6 +436,10 @@ public class Disco implements EscuchaReloj {
 
     public void setSistema(ServicioSistema sistema) {
         this.sistema = sistema;
+    }
+
+    public int getVelocidadCabezal() {
+        return velocidadCabezal;
     }
 
     public void setVelocidadCabezal(int velocidadCabezal) {
