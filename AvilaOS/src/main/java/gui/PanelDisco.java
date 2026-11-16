@@ -32,6 +32,7 @@ public class PanelDisco extends JPanel {
     private final SistemaArchivos fs;
     private final Consumer<String> aviso;
 
+    private final JSpinner spnVelocidad = new JSpinner(new SpinnerNumberModel(1, 1, 50, 1));
     private final JLabel lblInfo = new JLabel(" ");
     private final JLabel lblCola = new JLabel(" ");
     private final JComboBox<TipoPoliticaDisco> cmbPolitica = new JComboBox<>(TipoPoliticaDisco.values());
@@ -57,7 +58,16 @@ public class PanelDisco extends JPanel {
         add(construirNorte(), BorderLayout.NORTH);
         add(construirCentro(), BorderLayout.CENTER);
         cmbPolitica.setSelectedItem(disco.getPolitica().getTipo());
+        spnVelocidad.setValue(disco.getVelocidadCabezal());
         actualizar();
+    }
+
+    private void cambiarVelocidad() {
+        int v = (Integer) spnVelocidad.getValue();
+        disco.setVelocidadCabezal(v);
+        if (aviso != null) {
+            aviso.accept("Velocidad del cabezal cambiada a " + v + " bloque(s) por ciclo.");
+        }
     }
 
     private JPanel construirNorte() {
@@ -68,6 +78,12 @@ public class PanelDisco extends JPanel {
         selector.add(cmbPolitica);
         selector.add(btnCambiar);
         selector.add(new JLabel("(se puede cambiar con la simulación corriendo o pausada)"));
+        spnVelocidad.setToolTipText("Bloques que recorre el cabezal por ciclo de reloj");
+        JButton btnVelocidad = new JButton("Aplicar velocidad");
+        btnVelocidad.addActionListener(e -> cambiarVelocidad());
+        selector.add(new JLabel("   Velocidad del cabezal (bloques/ciclo):"));
+        selector.add(spnVelocidad);
+        selector.add(btnVelocidad);
 
         JPanel info = new JPanel(new GridLayout(2, 1));
         lblInfo.setFont(lblInfo.getFont().deriveFont(Font.BOLD));
@@ -145,7 +161,7 @@ public class PanelDisco extends JPanel {
         int dir = disco.getDireccion();
         String sentido = (dir >= 0) ? "↑ hacia bloques mayores" : "↓ hacia bloques menores";
         lblInfo.setText("Política: " + disco.getPolitica().getTipo() + "   |   Cabezal en el bloque "
-                + disco.getCabezal() + "   |   Dirección: " + sentido
+                + disco.getCabezal() + "   |   Velocidad: " + disco.getVelocidadCabezal() + " bloque(s)/ciclo   |   Dirección: " + sentido
                 + "   |   Modo: " + (fs.getModoActual() == modelo.enums.ModoUsuario.ADMINISTRADOR
                 ? "administrador" : "usuario " + fs.getUsuarioActual()));
         lblCola.setText("Pendientes: " + disco.getCantidadPendientes() + "   |   Atendidas: "
