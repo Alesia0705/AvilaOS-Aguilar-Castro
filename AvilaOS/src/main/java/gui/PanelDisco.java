@@ -25,7 +25,7 @@ public class PanelDisco extends JPanel {
 
     private static final String[] COLUMNAS_COLA = {"Proceso", "Operación", "Bloque", "Ciclo de llegada", "Estado"};
     private static final String[] COLUMNAS_ASIGNACION = {"Archivo", "Bloque inicial", "Bloques", "Dueño",
-        "Permiso", "Cadena de bloques"};
+        "Permiso", "Creado por", "Cadena de bloques"};
     private static final int MAX_CADENA = 14;
 
     private final Disco disco;
@@ -145,7 +145,9 @@ public class PanelDisco extends JPanel {
         int dir = disco.getDireccion();
         String sentido = (dir >= 0) ? "↑ hacia bloques mayores" : "↓ hacia bloques menores";
         lblInfo.setText("Política: " + disco.getPolitica().getTipo() + "   |   Cabezal en el bloque "
-                + disco.getCabezal() + "   |   Dirección: " + sentido);
+                + disco.getCabezal() + "   |   Dirección: " + sentido
+                + "   |   Modo: " + (fs.getModoActual() == modelo.enums.ModoUsuario.ADMINISTRADOR
+                ? "administrador" : "usuario " + fs.getUsuarioActual()));
         lblCola.setText("Pendientes: " + disco.getCantidadPendientes() + "   |   Atendidas: "
                 + disco.getSolicitudesAtendidas() + "   |   Desplazamiento total: "
                 + disco.getDesplazamientoTotal() + " bloques   |   Libres: "
@@ -178,9 +180,9 @@ public class PanelDisco extends JPanel {
             String cadena = cadena(a);
             firma.append(a.getRutaCompleta()).append('|').append(a.getTamanoBloques()).append('|')
                     .append(a.getPrimerBloque()).append('|').append(a.getDueno()).append('|')
-                    .append(a.getPermiso()).append(';');
+                    .append(a.getPermiso()).append('|').append(a.getCreadoPor()).append(';');
             modeloAsignacion.addRow(new Object[]{a.getRutaCompleta(), a.getPrimerBloque(), a.getTamanoBloques(),
-                a.getDueno(), a.getPermiso(), cadena});
+                a.getDueno(), a.getPermiso(), a.getCreadoPor(), cadena});
         }
         // el árbol solo se reconstruye si cambió algo (así no se colapsa mientras se navega)
         if (!firma.toString().equals(firmaArbol)) {
