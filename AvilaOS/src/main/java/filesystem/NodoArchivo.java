@@ -16,6 +16,8 @@ public class NodoArchivo {
     private int primerBloque;
     private NodoArchivo padre;
     private final ListaEnlazada<NodoArchivo> hijos;
+    // proceso que creo el archivo (para la tabla de asignacion); "(carga inicial)" si vino del JSON
+    private volatile String creadoPor = "(carga inicial)";
 
     /**
      * Constructor para directorios.
@@ -157,6 +159,16 @@ public class NodoArchivo {
 
     public void setTamanoBloques(int tamanoBloques) {
         this.tamanoBloques = tamanoBloques;
+    }
+
+    public String getCreadoPor() {
+        return creadoPor;
+    }
+
+    public void setCreadoPor(String creadoPor) {
+        if (creadoPor != null && !creadoPor.trim().isEmpty()) {
+            this.creadoPor = creadoPor.trim();
+        }
     }
 
     public int getPrimerBloque() {
