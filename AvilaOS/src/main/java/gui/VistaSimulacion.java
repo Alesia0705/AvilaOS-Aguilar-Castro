@@ -38,8 +38,9 @@ import org.jfree.data.xy.XYSeriesCollection;
 public class VistaSimulacion extends JFrame {
 
     private static final String[] NOMBRES_POLITICAS = {"Round Robin", "FCFS", "EDF", "Prioridades"};
-    private static final String[] COLUMNAS_PROCESOS = {"ID", "Proceso", "Tipo", "Estado", "Prioridad", "PC", "MAR",
-        "Restan", "Deadline"};
+    private static final String[] COLUMNAS_PROCESOS = {"ID", "Proceso", "Estado", "Motivo del bloqueo", "Tipo", "Prior.",
+        "PC", "MAR", "Restan", "Deadline"};
+    private static final int[] ANCHOS_PROCESOS = {30, 70, 100, 115, 90, 45, 40, 40, 55, 65};
     private static final String[] COLUMNAS_METRICAS = {"", "Utilización", "Throughput", "Respuesta prom.",
         "Espera prom.", "Cumplimiento", "Equidad (Jain)", "Terminados"};
     private static final String[] COLUMNAS_METRICAS_BUFFERS = {"Buffer", "Elementos producidos",
@@ -142,11 +143,14 @@ public class VistaSimulacion extends JFrame {
 
         JPanel fila2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 6));
         JButton btnProceso = new JButton("+ Proceso al vuelo");
-        JButton btnBuffer = new JButton("+ Buffer al vuelo");
         btnProceso.addActionListener(e -> procesoAlVuelo());
-        btnBuffer.addActionListener(e -> bufferAlVuelo());
         fila2.add(btnProceso);
-        fila2.add(btnBuffer);
+        if (sistema.getDisco() == null) {
+            // Solo el Proyecto 1 (sin disco) usa buffers y semáforos
+            JButton btnBuffer = new JButton("+ Buffer al vuelo");
+            btnBuffer.addActionListener(e -> bufferAlVuelo());
+            fila2.add(btnBuffer);
+        }
         if (sistema.getSistemaArchivos() != null) {
             JButton btnArchivo = new JButton("+ Proceso de E/S (archivo)");
             btnArchivo.addActionListener(e -> procesoArchivoAlVuelo());
@@ -161,6 +165,12 @@ public class VistaSimulacion extends JFrame {
         add(panel, BorderLayout.NORTH);
     }
 
+    private JPanel panelSoloSistema(JScrollPane scrollSistema) {
+        JPanel panel = new JPanel(new BorderLayout());
+        panel.add(scrollSistema, BorderLayout.CENTER);
+        return panel;
+    }
+
     private JPanel construirPanelMetricas() {
         JScrollPane scrollSistema = new JScrollPane(new JTable(modeloMetricas));
         scrollSistema.setBorder(BorderFactory.createTitledBorder(
@@ -172,6 +182,10 @@ public class VistaSimulacion extends JFrame {
         abajo.add(scrollBuffers, BorderLayout.CENTER);
         abajo.add(lblBloqueoSemaforos, BorderLayout.SOUTH);
 
+        if (sistema.getDisco() != null) {
+            // con disco no hay productor-consumidor: solo las métricas del sistema
+            return panelSoloSistema(scrollSistema);
+        }
         JPanel panel = new JPanel(new GridLayout(2, 1, 5, 5));
         panel.add(scrollSistema);
         panel.add(abajo);
@@ -194,8 +208,10 @@ public class VistaSimulacion extends JFrame {
             pestanas.addTab("Disco y archivos", panelDisco);
         }
 
-        JTable tablaBuffers = new JTable(modeloBuffers);
-        pestanas.addTab("Buffers y semáforos", new JScrollPane(tablaBuffers));
+        if (sistema.getDisco() == null) {
+            JTable tablaBuffers = new JTable(modeloBuffers);
+            pestanas.addTab("Buffers y semáforos", new JScrollPane(tablaBuffers));
+        }
         pestanas.addTab("Métricas", construirPanelMetricas());
 
         txtLogs.setEditable(false);
@@ -271,6 +287,13 @@ public class VistaSimulacion extends JFrame {
         vertical.setResizeWeight(1.0);
         vertical.setContinuousLayout(true);
         add(vertical, BorderLayout.CENTER);
+        // al mostrarse la ventana, las gráficas arrancan con ~260 px de alto
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentShown(java.awt.event.ComponentEvent e) {
+                SwingUtilities.invokeLater(() -> vertical.setDividerLocation(Math.max(250, vertical.getHeight() - 260)));
+            }
+        });
     }
 
     private ChartPanel crearGraficaSerie(XYSeries serie, String titulo, String ejeY, boolean porcentaje) {
@@ -639,14 +662,13 @@ public class VistaSimulacion extends JFrame {
         for (int i = 0; i < procesos.length; i++) {
             Proceso p = procesos[i];
             String estado = String.valueOf(p.getEstado());
-            if (p.getMotivoBloqueo() != MotivoBloqueo.NINGUNO) {
-                estado = estado + " (" + p.getMotivoBloqueo() + ")";
-            }
+            String motivo = (p.getMotivoBloqueo() == MotivoBloqueo.NINGUNO) ? "-" : String.valueOf(p.getMotivoBloqueo());
             modelo.addRow(new Object[]{
                 p.getId(),
                 p.getNombre(),
-                p.getTipo(),
                 estado,
+                motivo,
+                p.getTipo(),
                 p.getPrioridad(),
                 p.getPc(),
                 p.getMar(),
@@ -753,7 +775,12 @@ public class VistaSimulacion extends JFrame {
         }
 
         private JScrollPane tabla(String titulo, DefaultTableModel modelo) {
-            JScrollPane scroll = new JScrollPane(new JTable(modelo));
+            JTable tablaProcesos = new JTable(modelo);
+            tablaProcesos.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+            for (int i = 0; i < ANCHOS_PROCESOS.length; i++) {
+                tablaProcesos.getColumnModel().getColumn(i).setPreferredWidth(ANCHOS_PROCESOS[i]);
+            }
+            JScrollPane scroll = new JScrollPane(tablaProcesos);
             scroll.setBorder(BorderFactory.createTitledBorder(titulo));
             return scroll;
         }
