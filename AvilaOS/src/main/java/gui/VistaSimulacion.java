@@ -38,9 +38,9 @@ import org.jfree.data.xy.XYSeriesCollection;
 public class VistaSimulacion extends JFrame {
 
     private static final String[] NOMBRES_POLITICAS = {"Round Robin", "FCFS", "EDF", "Prioridades"};
-    private static final String[] COLUMNAS_PROCESOS = {"ID", "Proceso", "Tipo", "Estado", "Motivo del bloqueo", "Prior.",
+    private static final String[] COLUMNAS_PROCESOS = {"ID", "Proceso", "Estado", "Motivo del bloqueo", "Tipo", "Prior.",
         "PC", "MAR", "Restan", "Deadline"};
-    private static final int[] ANCHOS_PROCESOS = {35, 80, 90, 150, 170, 50, 45, 45, 60, 70};
+    private static final int[] ANCHOS_PROCESOS = {30, 70, 100, 115, 90, 45, 40, 40, 55, 65};
     private static final String[] COLUMNAS_METRICAS = {"", "Utilización", "Throughput", "Respuesta prom.",
         "Espera prom.", "Cumplimiento", "Equidad (Jain)", "Terminados"};
     private static final String[] COLUMNAS_METRICAS_BUFFERS = {"Buffer", "Elementos producidos",
@@ -666,9 +666,9 @@ public class VistaSimulacion extends JFrame {
             modelo.addRow(new Object[]{
                 p.getId(),
                 p.getNombre(),
-                p.getTipo(),
                 estado,
                 motivo,
+                p.getTipo(),
                 p.getPrioridad(),
                 p.getPc(),
                 p.getMar(),
