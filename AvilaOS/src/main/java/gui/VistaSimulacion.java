@@ -1,11 +1,13 @@
 package gui;
 
 import computador.Computador;
+import disco.Disco;
 import hardware.Cpu;
 import kernel.Kernel;
 import metricas.Metricas;
 import modelo.Proceso;
 import modelo.enums.MotivoBloqueo;
+import modelo.enums.TipoPoliticaDisco;
 import planificacion.PoliticaEDF;
 import planificacion.PoliticaFCFS;
 import planificacion.PoliticaPlanificacion;
@@ -45,6 +47,8 @@ public class VistaSimulacion extends JFrame {
         "Espera prom.", "Cumplimiento", "Equidad (Jain)", "Terminados"};
     private static final String[] COLUMNAS_METRICAS_BUFFERS = {"Buffer", "Elementos producidos",
         "Elementos consumidos"};
+    private static final String[] COLUMNAS_METRICAS_DISCO = {"Indicador", "Valor"};
+    private static final String[] COLUMNAS_POLITICAS_DISCO = {"Política", "Solicitudes atendidas"};
     private static final String[] COLUMNAS_BUFFERS = {"Buffer", "Anfitrión", "Capacidad", "Elementos",
         "mutex", "llenos", "vacíos", "Procesos en espera"};
     private static final int PUNTOS_GRAFICA = 150;
@@ -74,6 +78,8 @@ public class VistaSimulacion extends JFrame {
     // Métricas
     private final DefaultTableModel modeloMetricas = new DefaultTableModel(COLUMNAS_METRICAS, 0);
     private final DefaultTableModel modeloMetricasBuffers = new DefaultTableModel(COLUMNAS_METRICAS_BUFFERS, 0);
+    private final DefaultTableModel modeloMetricasDisco = new DefaultTableModel(COLUMNAS_METRICAS_DISCO, 0);
+    private final DefaultTableModel modeloPoliticasDisco = new DefaultTableModel(COLUMNAS_POLITICAS_DISCO, 0);
     private final JLabel lblBloqueoSemaforos = new JLabel(" ");
 
     // Log
@@ -85,6 +91,7 @@ public class VistaSimulacion extends JFrame {
     private final XYSeries serieThroughput = new XYSeries("Throughput");
     private final XYSeries serieExito = new XYSeries("Tasa de éxito");
     private final XYSeries serieEspera = new XYSeries("Tiempo de espera");
+    private final XYSeries serieDesplazamiento = new XYSeries("Desplazamiento acumulado");
     private long[] ocupadosPrevios;
     private long[] totalesPrevios;
 
@@ -165,16 +172,30 @@ public class VistaSimulacion extends JFrame {
         add(panel, BorderLayout.NORTH);
     }
 
-    private JPanel panelSoloSistema(JScrollPane scrollSistema) {
-        JPanel panel = new JPanel(new BorderLayout());
-        panel.add(scrollSistema, BorderLayout.CENTER);
-        return panel;
-    }
-
     private JPanel construirPanelMetricas() {
         JScrollPane scrollSistema = new JScrollPane(new JTable(modeloMetricas));
         scrollSistema.setBorder(BorderFactory.createTitledBorder(
                 "Por computador y del sistema completo (throughput en procesos por ciclo; respuesta y espera en ciclos; cumplimiento de deadlines)"));
+
+        if (sistema.getDisco() != null) {
+            JScrollPane scrollDisco = new JScrollPane(new JTable(modeloMetricasDisco));
+            scrollDisco.setBorder(BorderFactory.createTitledBorder(
+                    "Métricas del disco, swap y planificador de mediano plazo"));
+
+            JScrollPane scrollPoliticas = new JScrollPane(new JTable(modeloPoliticasDisco));
+            scrollPoliticas.setBorder(BorderFactory.createTitledBorder(
+                    "Solicitudes de E/S atendidas por política de disco"));
+
+            JPanel abajoDisco = new JPanel(new GridLayout(1, 2, 5, 5));
+            abajoDisco.add(scrollDisco);
+            abajoDisco.add(scrollPoliticas);
+
+            JPanel panelDiscoMetricas = new JPanel(new GridLayout(2, 1, 5, 5));
+            panelDiscoMetricas.add(scrollSistema);
+            panelDiscoMetricas.add(abajoDisco);
+            return panelDiscoMetricas;
+        }
+
         JScrollPane scrollBuffers = new JScrollPane(new JTable(modeloMetricasBuffers));
         scrollBuffers.setBorder(BorderFactory.createTitledBorder("Productor-consumidor por buffer"));
 
@@ -182,10 +203,6 @@ public class VistaSimulacion extends JFrame {
         abajo.add(scrollBuffers, BorderLayout.CENTER);
         abajo.add(lblBloqueoSemaforos, BorderLayout.SOUTH);
 
-        if (sistema.getDisco() != null) {
-            // con disco no hay productor-consumidor: solo las métricas del sistema
-            return panelSoloSistema(scrollSistema);
-        }
         JPanel panel = new JPanel(new GridLayout(2, 1, 5, 5));
         panel.add(scrollSistema);
         panel.add(abajo);
@@ -276,6 +293,14 @@ public class VistaSimulacion extends JFrame {
         JTabbedPane pestanasGraficas = new JTabbedPane();
         pestanasGraficas.addTab("Utilización de CPU", panelUtilizacion);
         pestanasGraficas.addTab("Throughput, tasa de éxito y espera", panelRendimiento);
+        if (sistema.getDisco() != null) {
+            ChartPanel panelDesplazamiento = crearGraficaSerie(
+                    serieDesplazamiento,
+                    "Desplazamiento acumulado del cabezal",
+                    "Bloques recorridos",
+                    false);
+            pestanasGraficas.addTab("Desplazamiento del cabezal", panelDesplazamiento);
+        }
         pestanasGraficas.setPreferredSize(new Dimension(1100, 200));
         pestanasGraficas.setMinimumSize(new Dimension(300, 90));
 
@@ -563,6 +588,11 @@ public class VistaSimulacion extends JFrame {
             serieEspera.add((double) ciclo, Metricas.tiempoEsperaPromedio(terminadosSistema));
         }
 
+        if (sistema.getDisco() != null) {
+            actualizarMetricasDisco(ciclo);
+            return;
+        }
+
         modeloMetricasBuffers.setRowCount(0);
         for (int i = 0; i < sistema.getCantidadBuffers(); i++) {
             String id = String.valueOf(sistema.getBufferEn(i).getId());
@@ -574,6 +604,68 @@ public class VistaSimulacion extends JFrame {
         }
         lblBloqueoSemaforos.setText("  Tiempo promedio que los procesos pasan bloqueados en semáforos: "
                 + formato(Metricas.tiempoPromedioBloqueoSemaforos(todos), "%.2f") + " ciclos");
+    }
+
+    private void actualizarMetricasDisco(long ciclo) {
+        Disco disco = sistema.getDisco();
+        if (disco == null) {
+            return;
+        }
+
+        long suspensiones = 0;
+        long reactivaciones = 0;
+        for (int i = 0; i < sistema.getCantidadComputadores(); i++) {
+            Kernel k = sistema.getComputador(i + 1).getKernel();
+            suspensiones += k.getSuspensiones();
+            reactivaciones += k.getReactivaciones();
+        }
+
+        modeloMetricasDisco.setRowCount(0);
+        modeloMetricasDisco.addRow(new Object[]{
+            "Desplazamiento total del cabezal",
+            disco.getDesplazamientoTotal() + " bloques"
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Tiempo de espera promedio (E/S)",
+            formato(disco.getTiempoEsperaPromedio(), "%.2f") + " ciclos"
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Solicitudes de E/S atendidas",
+            String.valueOf(disco.getSolicitudesAtendidas())
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Bloques libres / Swap libre",
+            disco.contarBloquesLibres(false) + " libres  |  "
+                    + disco.contarBloquesLibres(true) + " / " + disco.getBloquesSwap() + " swap"
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Suspensiones (mediano plazo)",
+            String.valueOf(suspensiones)
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Reactivaciones (mediano plazo)",
+            String.valueOf(reactivaciones)
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Procesos rechazados",
+            String.valueOf(sistema.getRechazos())
+        });
+
+        modeloPoliticasDisco.setRowCount(0);
+        TipoPoliticaDisco[] politicas = TipoPoliticaDisco.values();
+        for (int i = 0; i < politicas.length; i++) {
+            TipoPoliticaDisco tipo = politicas[i];
+            modeloPoliticasDisco.addRow(new Object[]{
+                tipo.name(),
+                String.valueOf(disco.getAtendidasPorPolitica(tipo))
+            });
+        }
+        modeloPoliticasDisco.addRow(new Object[]{
+            "Total atendidas",
+            String.valueOf(disco.getSolicitudesAtendidas())
+        });
+
+        serieDesplazamiento.add((double) ciclo, (double) disco.getDesplazamientoTotal());
     }
 
     private Object[] filaMetricas(String nombre, double utilizacion, Proceso[] terminados, long ciclo) {
