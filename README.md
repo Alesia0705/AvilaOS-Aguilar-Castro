@@ -1,138 +1,71 @@
-# \# ÁvilaOS
+# ÁvilaOS
 
-# 
+Simulador de sistema operativo en Java (Swing) para el curso de Sistemas Operativos de la UNIMET (2627-1).
 
-# Simulador de un sistema operativo distribuido en Java. Proyecto de Sistemas Operativos (UNIMET, 2627-1).
+**Integrantes:** Alesia Castro y Javier Aguilar.
 
-# 
+El Proyecto 1 simula CPU, memoria, planificación de procesos, semáforos y métricas. El **Proyecto 2** agrega un disco simulado con sistema de archivos, planificación de disco y suspensión de procesos.
 
-# \*\*Integrantes:\*\* Alesia Castro y Javier Aguilar.
+## Qué hace (Proyecto 2)
 
-# 
+- **Disco simulado** de 100 a 500 bloques con asignación encadenada, área de intercambio (swap) configurable, cabezal con posición, dirección y velocidad configurable, y una única cola de E/S. Cada bloque leído o escrito cuesta un ciclo de reloj.
+- **Sistema de archivos** en árbol (`JTree`): nombre, bloques, dueño, permisos y primer bloque. Tabla de asignación (`JTable`) con la cadena de bloques de cada archivo.
+- **Operaciones de archivo (crear, leer, actualizar, eliminar) solo mediante procesos de E/S** que pasan por las colas normales de la CPU y se bloquean con el motivo `ESPERA_DISCO`.
+- **Cuatro políticas de disco** intercambiables en caliente: FIFO, SSTF, SCAN y C-SCAN.
+- **Modelo de siete estados** y **planificador de mediano plazo**: suspende procesos bloqueados hacia el swap cuando falta RAM y los reactiva después.
+- **Modos administrador y usuario**: el usuario solo lee archivos propios o públicos, solo crea archivos dentro de sus directorios y no modifica archivos del sistema ni de otros. La interfaz valida y explica los rechazos sin detener la simulación.
+- **Métricas**: desplazamiento total del cabezal, tiempo de espera promedio en la cola de E/S, solicitudes atendidas por política, suspensiones y reactivaciones, gráfica de desplazamiento acumulado, además de las métricas del Proyecto 1.
+- **Log de eventos** con las decisiones del disco y del planificador de mediano plazo.
+- **Persistencia**: carga de procesos y del sistema de archivos desde JSON, y guardado del sistema de archivos en JSON desde la pestaña «Disco y archivos».
 
-# \## Qué hace
+## Requisitos
 
-# 
+- Java 21
+- Maven
+- NetBeans (recomendado)
 
-# \- Simula 2 o más computadores como instancias de una misma clase. Cada uno tiene su CPU, su RAM y su kernel.
+## Cómo ejecutarlo
 
-# \- Un reloj global marca los ciclos y avisa a todos los computadores a la vez.
+1. Clonar el repositorio y abrir la carpeta `AvilaOS` como proyecto Maven en NetBeans.
+2. Compilar con **Clean and Build**.
+3. Ejecutar la clase principal `AvilaOS` (paquete `avilaos`) con **F6**.
+4. En la Vista 1 pulsar **Cargar procesos (JSON)** y **Cargar sistema de archivos (JSON)** (ambos son obligatorios), elegir la política de disco y el modo iniciales y pulsar **Iniciar simulación**.
+5. La Vista 2 muestra las colas del computador (con el motivo de cada bloqueo), la pestaña «Disco y archivos», las métricas, las gráficas y el log.
 
-# \- Políticas de planificación: FCFS, EDF, Round Robin y Prioridades. Se pueden cambiar en ejecución.
+Desde la línea de comandos: `mvn -f AvilaOS/pom.xml compile exec:java`.
 
-# \- Procesos CPU bound, IO bound, productores y consumidores.
+## Archivos JSON de ejemplo (carpeta `json/`)
 
-# \- Productor-consumidor con buffers acotados, semáforos simulados (mutex, llenos, vacíos) y latencia de red cuando el buffer está en otro computador.
+| Archivo | Para qué sirve |
+|---|---|
+| `procesos_enunciado.json` | Los 8 procesos del caso del enunciado |
+| `sistema_archivos_enunciado.json` | Sistema de archivos del enunciado (disco de 200 bloques, cabezal en 50) |
+| `procesos_swap.json` | RAM de 48: obliga a suspender y reactivar procesos |
+| `sistema_archivos_ejemplo.json` | Ejemplo en el formato anterior (también se puede cargar) |
 
-# \- Modo usuario, modo sistema operativo y CPU ociosa.
+Formato de procesos: `globalConfig` (`cycleDurationMs`, `swapSizeBlocks`, `initialDiskPolicy`), `computer` (`ramCapacity`, `policy`, `quantum`) y `processes` (`name`, `memory`, `deadline`, `instructions`, `targetPath`, `operation`, `fileSizeBlocks`).
+Formato del sistema de archivos: `diskConfig` (`totalBlocks`, `initialHead`) y `fileSystem` (`path`, `type`, `startBlock`, `blocks`, `owner`, `permissions`).
 
-# \- Métricas: utilización de CPU, throughput, tiempo de respuesta, tiempo de espera, tasa de éxito (cumplimiento de deadlines) y equidad de Jain, con gráficas.
+## Pruebas por consola
 
-# \- Log de eventos del kernel y de los semáforos.
+Se ejecutan desde NetBeans con clic derecho, **Run File**, con la carpeta `AvilaOS` como directorio de trabajo:
 
-# \- Guardar y cargar un escenario completo en un archivo CSV.
+| Clase | Qué comprueba |
+|---|---|
+| `disco.PruebaDiscoAnexo` | Asignación encadenada, swap y desplazamiento del cabezal |
+| `disco.PruebaPoliticasDisco` | Compara FIFO, SSTF, SCAN y C-SCAN con los mismos procesos |
+| `filesystem.PruebaFilesystemJson` | Carga y guardado del sistema de archivos y permisos básicos |
+| `kernel.PruebaMedianoPlazo` | Suspensiones y reactivaciones con RAM insuficiente |
+| `kernel.PruebaModosUsuario` | Reglas de permisos y simulación completa como usuario |
 
-# 
+## Estructura
 
-# \## Requisitos
+`modelo` (proceso y enums), `hardware`, `kernel`, `planificacion` (CPU), `disco` (disco y políticas de disco), `filesystem`, `sistema`, `reloj`, `sincronizacion`, `util` (listas propias, log, gestores de JSON), `metricas` y `gui`. La interfaz solo observa el sistema y le envía órdenes; la lógica no vive en las ventanas. El código propio no usa colecciones de `java.util`.
 
-# 
+## Flujo de trabajo en GitHub
 
-# \- Java 21
+Rama `main` estable, rama `develop` de integración y ramas por funcionalidad (`feat/...`, `test/...`) con Pull Requests revisados hacia `develop`. El trabajo está repartido en Issues.
 
-# \- Maven
+## Informe
 
-# \- NetBeans (recomendado)
-
-# 
-
-# \## Cómo ejecutarlo
-
-# 
-
-# 1\. Clonar el repositorio y abrirlo como proyecto Maven en NetBeans.
-
-# 2\. Compilar con \*\*Clean and Build\*\*.
-
-# 3\. Ejecutar la clase principal `AvilaOS` (paquete `avilaos`) con \*\*F6\*\*.
-
-# 4\. En la Vista 1, configurar la simulación a mano o pulsar \*\*Cargar escenario (CSV)\*\*.
-
-# 5\. Pulsar \*\*Iniciar simulación\*\* para abrir la Vista 2.
-
-# 
-
-# \## Escenarios de ejemplo
-
-# 
-
-# En la carpeta `csv/`:
-
-# 
-
-# | Archivo | Para qué sirve |
-
-# |---|---|
-
-# | `escenario\_ejemplo.csv` | Escenario general con 3 computadores y varias políticas |
-
-# | `escenario\_edf\_fcfs.csv` | Compara EDF y FCFS: con FCFS el cumplimiento de deadlines es 50 %, con EDF 100 % |
-
-# | `escenario\_latencia.csv` | Productor y consumidor en computadores distintos, para ver la latencia de red |
-
-# | `escenario\_con\_error.csv` | Archivo con un dato inválido, para ver cómo se reporta el error |
-
-# 
-
-# \## Estructura
-
-# 
-
-# | Paquete | Contenido |
-
-# |---|---|
-
-# | `avilaos` | Clase principal |
-
-# | `computador` | Computador: ensambla CPU, memoria y kernel |
-
-# | `hardware` | Cpu y Memoria |
-
-# | `kernel` | Kernel y la interfaz ServicioSistema |
-
-# | `planificacion` | Políticas FCFS, EDF, Round Robin y Prioridades |
-
-# | `sincronizacion` | Semáforo, Buffer y ColaProcesos |
-
-# | `reloj` | RelojGlobal y EscuchaReloj |
-
-# | `sistema` | SistemaDistribuido |
-
-# | `modelo` | Proceso, configuración y enums |
-
-# | `metricas` | Cálculo de las métricas |
-
-# | `gui` | Vista 1, Vista 2 y fábrica con las validaciones |
-
-# | `util` | ListaEnlazada, Nodo, LogEventos, GestorArchivo y GestorEscenario |
-
-# 
-
-# No se usan colecciones de `java.util`: las estructuras de datos son propias.
-
-# 
-
-# \## Control de versiones
-
-# 
-
-# GitFlow: `main` guarda la versión estable, `develop` integra el trabajo y cada tarea se hace en una rama propia (`feat/...`, `fix/...`) que se integra con un pull request.
-
-# 
-
-# \## Documentación
-
-# 
-
-# El informe con los diagramas UML y las conclusiones se entregó junto con el repositorio.
-
+El informe en PDF (clases, enums, interfaces, dos diagramas UML y conclusiones sobre las políticas de disco y la suspensión) se entrega junto con este repositorio.
