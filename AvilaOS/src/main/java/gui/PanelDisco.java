@@ -62,6 +62,30 @@ public class PanelDisco extends JPanel {
         actualizar();
     }
 
+    private void guardarSistemaArchivos() {
+        JFileChooser selector = new JFileChooser();
+        selector.setDialogTitle("Guardar el sistema de archivos");
+        selector.setSelectedFile(new java.io.File("sistema_archivos_guardado.json"));
+        if (selector.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+        java.io.File destino = selector.getSelectedFile();
+        if (!destino.getName().toLowerCase().endsWith(".json")) {
+            destino = new java.io.File(destino.getPath() + ".json");
+        }
+        try {
+            util.GestorArchivosJson.guardar(destino.getPath(), fs);
+            if (aviso != null) {
+                aviso.accept("Sistema de archivos guardado en " + destino.getName() + ".");
+            }
+            JOptionPane.showMessageDialog(this, "Sistema de archivos guardado en:\n" + destino.getPath(),
+                    "Guardado", JOptionPane.INFORMATION_MESSAGE);
+        } catch (java.io.IOException ex) {
+            JOptionPane.showMessageDialog(this, "No se pudo guardar el archivo: " + ex.getMessage(),
+                    "Error al guardar", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
     private void cambiarVelocidad() {
         int v = (Integer) spnVelocidad.getValue();
         disco.setVelocidadCabezal(v);
@@ -85,6 +109,9 @@ public class PanelDisco extends JPanel {
         cabezal.add(new JLabel("Velocidad del cabezal (bloques/ciclo):"));
         cabezal.add(spnVelocidad);
         cabezal.add(btnVelocidad);
+        JButton btnGuardar = new JButton("Guardar sistema de archivos (JSON)");
+        btnGuardar.addActionListener(e -> guardarSistemaArchivos());
+        cabezal.add(btnGuardar);
         JPanel controles = new JPanel(new GridLayout(2, 1));
         controles.add(selector);
         controles.add(cabezal);
