@@ -1,7 +1,14 @@
 package sistema;
 
 import computador.Computador;
+import disco.Disco;
+import disco.SolicitudDisco;
+import filesystem.NodoArchivo;
+import filesystem.SistemaArchivos;
 import modelo.Proceso;
+import modelo.enums.ModoUsuario;
+import modelo.enums.Permiso;
+import modelo.enums.TipoOperacion;
 import planificacion.PoliticaPlanificacion;
 import sincronizacion.Buffer;
 import reloj.RelojGlobal;
@@ -9,11 +16,11 @@ import kernel.ServicioSistema;
 import hardware.Cpu;
 import kernel.Kernel;
 import util.LogEventos;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster y el
- * parámetro de latencia de red. Es el punto de entrada para crear computadores
- * y enviarles procesos.
+ * Sistema distribuido de ÁvilaOS: reúne los computadores del clúster, el
+ * parámetro de latencia de red, el disco simulado y el sistema de archivos.
  *
  * @author Alesia Castro
  */
@@ -27,6 +34,8 @@ public class SistemaDistribuido implements ServicioSistema {
     private final RelojGlobal reloj;
     // volatile: la interfaz lo conecta y lo leen los hilos de los computadores
     private volatile LogEventos log;
+    private volatile Disco disco;
+    private volatile SistemaArchivos sistemaArchivos;
 
     /**
      * @param latenciaRed ciclos extra que cuesta cada acceso a un buffer remoto
@@ -46,6 +55,34 @@ public class SistemaDistribuido implements ServicioSistema {
         this.cantidadComputadores = 0;
         this.buffers = new Buffer[4];
         this.cantidadBuffers = 0;
+    }
+
+    /**
+     * Conecta el disco y su sistema de archivos al sistema distribuido y registra
+     * el disco en el reloj global.
+     */
+    public void conectarDisco(Disco disco, SistemaArchivos sistemaArchivos) {
+        this.disco = disco;
+        this.sistemaArchivos = sistemaArchivos;
+        if (disco != null) {
+            disco.setSistema(this);
+            reloj.registrar(disco);
+        }
+    }
+
+    /**
+     * Conecta el disco y crea automáticamente un SistemaArchivos asociado.
+     */
+    public void conectarDisco(Disco disco) {
+        conectarDisco(disco, (disco != null) ? new SistemaArchivos(disco) : null);
+    }
+
+    public Disco getDisco() {
+        return disco;
+    }
+
+    public SistemaArchivos getSistemaArchivos() {
+        return sistemaArchivos;
     }
 
     /**
@@ -181,7 +218,8 @@ public class SistemaDistribuido implements ServicioSistema {
     public int getCantidadBuffers() {
         return cantidadBuffers;
     }
-        /** CPU de cada computador: para la utilización del sistema y la gráfica. */
+
+    /** CPU de cada computador: para la utilización del sistema y la gráfica. */
     public Cpu[] getCpus() {
         Cpu[] cpus = new Cpu[cantidadComputadores];
         for (int i = 0; i < cantidadComputadores; i++) {
@@ -230,10 +268,12 @@ public class SistemaDistribuido implements ServicioSistema {
         }
         return todos;
     }
+
     public int getCantidadComputadores() {
         return cantidadComputadores;
     }
-        /** Conecta el log de eventos. Puede ser null (sin log). */
+
+    /** Conecta el log de eventos. Puede ser null (sin log). */
     public void setLogEventos(LogEventos log) {
         this.log = log;
     }
@@ -245,6 +285,186 @@ public class SistemaDistribuido implements ServicioSistema {
             actual.registrar(ciclo, descripcion);
         }
     }
+
+    @Override
+    public boolean solicitarDisco(Proceso proceso, long ciclo) {
+        if (proceso == null) {
+            return false;
+        }
+        Disco d = this.disco;
+        SistemaArchivos fs = this.sistemaArchivos;
+        if (d == null || fs == null) {
+            registrarEvento(ciclo, "No hay disco conectado: se rechaza la solicitud de "
+                    + proceso.getNombre() + ".");
+            return false;
+        }
+
+        String ruta = proceso.getRutaArchivo();
+        TipoOperacion op = proceso.getOperacion();
+        if (ruta == null || ruta.trim().isEmpty() || op == null) {
+            registrarEvento(ciclo, "Solicitud de archivo inválida para " + proceso.getNombre() + ".");
+            return false;
+        }
+
+        // El proceso pide la operacion con la identidad con la que fue creado (si no la trae, la de la sesion)
+        ModoUsuario modo = (proceso.getModoSolicitante() != null) ? proceso.getModoSolicitante() : fs.getModoActual();
+        String usuario = (proceso.getUsuarioSolicitante() != null) ? proceso.getUsuarioSolicitante()
+                : fs.getUsuarioActual();
+        String motivo = fs.verificarPermiso(op, ruta, modo, usuario);
+        if (motivo != null) {
+            notificarRechazo(ciclo, proceso.getNombre() + " (" + descripcionIdentidad(modo, usuario) + ") no puede "
+                    + op + " " + ruta + ": " + motivo);
+            return false;
+        }
+
+        int bloqueObjetivo;
+        int cantidadBloques = 1;
+        switch (op) {
+            case CREAR -> {
+                NodoArchivo creado = fs.crearArchivo(ruta, proceso.getBloquesArchivo(), usuario, Permiso.PUBLICO,
+                        modo, usuario);
+                if (creado == null) {
+                    registrarEvento(ciclo, "Error al crear " + ruta + " para " + proceso.getNombre()
+                            + " (sin espacio, ruta inválida o sin permiso).");
+                    return false;
+                }
+                creado.setCreadoPor(proceso.getNombre());
+                bloqueObjetivo = creado.getPrimerBloque();
+                cantidadBloques = creado.getTamanoBloques();
+            }
+            case LEER -> {
+                NodoArchivo nodo = fs.leerArchivo(ruta, modo, usuario);
+                if (nodo == null) {
+                    registrarEvento(ciclo, "Error al leer " + ruta + " para " + proceso.getNombre()
+                            + " (no existe o acceso denegado).");
+                    return false;
+                }
+                bloqueObjetivo = nodo.getPrimerBloque();
+                cantidadBloques = Math.max(1, nodo.getTamanoBloques());
+            }
+            case ACTUALIZAR -> {
+                NodoArchivo nodo = fs.leerArchivo(ruta, modo, usuario);
+                if (nodo == null) {
+                    registrarEvento(ciclo, "Error al actualizar " + ruta + " para " + proceso.getNombre()
+                            + " (no existe o acceso denegado).");
+                    return false;
+                }
+                int nuevosBloques = proceso.getBloquesArchivo();
+                if (nuevosBloques > 0 && nuevosBloques != nodo.getTamanoBloques()) {
+                    if (!fs.actualizar(ruta, null, nuevosBloques, null, modo, usuario)) {
+                        registrarEvento(ciclo, "Error al redimensionar " + ruta + " para " + proceso.getNombre() + ".");
+                        return false;
+                    }
+                }
+                bloqueObjetivo = nodo.getPrimerBloque();
+                cantidadBloques = Math.max(1, nodo.getTamanoBloques());
+            }
+            case ELIMINAR -> {
+                NodoArchivo nodo = fs.buscarNodo(ruta);
+                if (nodo == null) {
+                    registrarEvento(ciclo, "Error al eliminar " + ruta + " para " + proceso.getNombre()
+                            + " (no existe).");
+                    return false;
+                }
+                int bloqueAntes = nodo.isEsDirectorio() ? 0 : nodo.getPrimerBloque();
+                if (!fs.eliminar(ruta, modo, usuario)) {
+                    registrarEvento(ciclo, "Acceso denegado al eliminar " + ruta + " para " + proceso.getNombre() + ".");
+                    return false;
+                }
+                bloqueObjetivo = Math.max(0, bloqueAntes);
+                cantidadBloques = Math.max(1, nodo.getTamanoBloques());
+            }
+            default -> {
+                return false;
+            }
+        }
+
+        SolicitudDisco solicitud = new SolicitudDisco(proceso, bloqueObjetivo, op, ciclo, cantidadBloques);
+        if (!d.encolarSolicitud(solicitud)) {
+            registrarEvento(ciclo, "No se pudo encolar solicitud de disco para " + proceso.getNombre() + ".");
+            return false;
+        }
+        registrarEvento(ciclo, "Proceso " + proceso.getNombre() + " solicita " + op
+                + " en " + ruta + " (bloque " + bloqueObjetivo + ").");
+        return true;
+    }
+
+    // Operaciones de archivo rechazadas por permisos (para las metricas)
+    private final AtomicInteger rechazos = new AtomicInteger();
+
+    private static String descripcionIdentidad(ModoUsuario modo, String usuario) {
+        return (modo == ModoUsuario.ADMINISTRADOR) ? "modo administrador" : "modo usuario " + usuario;
+    }
+
+    /**
+     * Anota una operacion de archivo rechazada (con su explicacion) en el log y la cuenta.
+     * La simulacion sigue: solo se rechaza esa operacion.
+     */
+    public void notificarRechazo(long ciclo, String descripcion) {
+        rechazos.incrementAndGet();
+        registrarEvento(ciclo, "Operación rechazada: " + descripcion);
+    }
+
+    /** Cantidad de operaciones de archivo rechazadas por permisos. */
+    public int getRechazos() {
+        return rechazos.get();
+    }
+
+    @Override
+    public boolean solicitarSwap(Proceso proceso, TipoOperacion operacion, long ciclo) {
+        Disco d = this.disco;
+        if (proceso == null || d == null) {
+            return false;
+        }
+        int bloque;
+        if (operacion == TipoOperacion.SUSPENDER) {
+            // 1 unidad de RAM = 1 bloque de swap
+            bloque = d.asignarSwap(proceso.getNombre(), proceso.getMemoriaRAM());
+            if (bloque < 0) {
+                registrarEvento(ciclo, "Sin espacio en swap para suspender a " + proceso.getNombre()
+                        + " (necesita " + proceso.getMemoriaRAM() + " bloques, hay "
+                        + d.contarBloquesLibres(true) + " libres).");
+                return false;
+            }
+            proceso.setBloqueSwap(bloque);
+        } else if (operacion == TipoOperacion.REACTIVAR) {
+            bloque = proceso.getBloqueSwap();
+            if (bloque < 0) {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        SolicitudDisco solicitud = new SolicitudDisco(proceso, bloque, operacion, ciclo, proceso.getMemoriaRAM());
+        if (!d.encolarSolicitud(solicitud)) {
+            if (operacion == TipoOperacion.SUSPENDER) {
+                d.liberarCadena(bloque);
+                proceso.setBloqueSwap(-1);
+            }
+            return false;
+        }
+        registrarEvento(ciclo, "Proceso " + proceso.getNombre() + " solicita " + operacion
+                + " en swap (bloque " + bloque + ", " + proceso.getMemoriaRAM() + " bloques).");
+        return true;
+    }
+
+    @Override
+    public void completarSwap(Proceso proceso, TipoOperacion operacion, long ciclo) {
+        Computador destino = getComputador(proceso.getComputadorAsignado());
+        if (destino != null) {
+            destino.getKernel().completarSwap(proceso, operacion, ciclo);
+        }
+    }
+
+    @Override
+    public void liberarSwap(Proceso proceso) {
+        Disco d = this.disco;
+        if (d != null && proceso != null && proceso.getBloqueSwap() >= 0) {
+            d.liberarCadena(proceso.getBloqueSwap());
+            proceso.setBloqueSwap(-1);
+        }
+    }
+
     @Override
     public int getLatenciaRed() {
         return latenciaRed;

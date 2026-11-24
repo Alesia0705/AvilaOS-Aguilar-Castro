@@ -3,6 +3,8 @@ package modelo;
 import modelo.enums.EstadoProceso;
 import modelo.enums.TipoProceso;
 import modelo.enums.MotivoBloqueo;
+import modelo.enums.ModoUsuario;
+import modelo.enums.TipoOperacion;
 
 /**
  * Representa un proceso dentro del simulador ÁvilaOS.
@@ -55,6 +57,22 @@ public class Proceso {
     private String idBuffer;
     private int ciclosProdCons;
     private int cantidadElementos;
+
+    // --- E/S de archivos (Proyecto 2) ---
+    private TipoOperacion operacion;
+    private String rutaArchivo;
+    private int bloquesArchivo;
+    private boolean solicitudEnviada;
+    // modo y usuario con los que se creo el proceso: con esa identidad pide la operacion al disco
+    private ModoUsuario modoSolicitante;
+    private String usuarioSolicitante;
+
+    // --- Planificador de mediano plazo (Proyecto 2) ---
+    // volatile: el kernel y el disco (hilos distintos) leen y escriben estos campos
+    private volatile boolean enMemoria = true;
+    private volatile int transitoSwap;      // 0 = ninguno, 1 = suspendiendose, 2 = reactivandose
+    private volatile int bloqueSwap = -1;   // primer bloque del swap donde esta guardado (-1 = ninguno)
+    private volatile int vecesSuspendido;
 
     /**
      * Constructor para instanciar un nuevo proceso desde la GUI.
@@ -339,6 +357,114 @@ public class Proceso {
 
     public void incrementarCiclosBloqueadoSemaforo() {
         ciclosBloqueadoSemaforo++;
+    }
+
+    public TipoOperacion getOperacion() {
+        return operacion;
+    }
+
+    public void setOperacion(TipoOperacion operacion) {
+        this.operacion = operacion;
+    }
+
+    public String getRutaArchivo() {
+        return rutaArchivo;
+    }
+
+    public void setRutaArchivo(String rutaArchivo) {
+        this.rutaArchivo = rutaArchivo;
+    }
+
+    /**
+     * Tamano en bloques del archivo (solo se usa al crear).
+     */
+    public int getBloquesArchivo() {
+        return bloquesArchivo;
+    }
+
+    public void setBloquesArchivo(int bloquesArchivo) {
+        this.bloquesArchivo = bloquesArchivo;
+    }
+
+    public boolean esArchivo() {
+        return tipo == TipoProceso.ES_ARCHIVO;
+    }
+
+    /**
+     * true cuando el proceso ya envio su solicitud al disco.
+     */
+    public boolean isSolicitudEnviada() {
+        return solicitudEnviada;
+    }
+
+    public void setSolicitudEnviada(boolean solicitudEnviada) {
+        this.solicitudEnviada = solicitudEnviada;
+    }
+
+    public ModoUsuario getModoSolicitante() {
+        return modoSolicitante;
+    }
+
+    public void setModoSolicitante(ModoUsuario modoSolicitante) {
+        this.modoSolicitante = modoSolicitante;
+    }
+
+    public String getUsuarioSolicitante() {
+        return usuarioSolicitante;
+    }
+
+    public void setUsuarioSolicitante(String usuarioSolicitante) {
+        this.usuarioSolicitante = usuarioSolicitante;
+    }
+
+    /** true si el proceso ocupa RAM (false mientras esta suspendido en swap). */
+    public boolean isEnMemoria() {
+        return enMemoria;
+    }
+
+    public void setEnMemoria(boolean enMemoria) {
+        this.enMemoria = enMemoria;
+    }
+
+    /** true si hay una suspension o reactivacion en curso (solicitud de swap en la cola del disco). */
+    public boolean isEnTransitoSwap() {
+        return transitoSwap != 0;
+    }
+
+    public boolean isSuspendiendo() {
+        return transitoSwap == 1;
+    }
+
+    public boolean isReactivando() {
+        return transitoSwap == 2;
+    }
+
+    public void marcarSuspendiendo() {
+        this.transitoSwap = 1;
+    }
+
+    public void marcarReactivando() {
+        this.transitoSwap = 2;
+    }
+
+    public void terminarTransitoSwap() {
+        this.transitoSwap = 0;
+    }
+
+    public int getBloqueSwap() {
+        return bloqueSwap;
+    }
+
+    public void setBloqueSwap(int bloqueSwap) {
+        this.bloqueSwap = bloqueSwap;
+    }
+
+    public int getVecesSuspendido() {
+        return vecesSuspendido;
+    }
+
+    public void incrementarVecesSuspendido() {
+        this.vecesSuspendido++;
     }
 
     @Override

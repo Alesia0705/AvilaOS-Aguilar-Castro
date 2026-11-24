@@ -1,15 +1,16 @@
 package avilaos;
 
-import gui.VistaCreacion;
+import gui.VistaCarga;
 
 /**
- * Clase principal de inicio para ÁvilaOS.
+ * Punto de entrada de ÁvilaOS. Abre la Vista 1, donde se cargan los dos JSON
+ * obligatorios (procesos y sistema de archivos) antes de iniciar el reloj.
  */
 public class AvilaOS {
 
     public static void main(String[] args) {
         javax.swing.SwingUtilities.invokeLater(() -> {
-            new VistaCreacion().setVisible(true);
+            new VistaCarga().setVisible(true);
         });
     }
 }

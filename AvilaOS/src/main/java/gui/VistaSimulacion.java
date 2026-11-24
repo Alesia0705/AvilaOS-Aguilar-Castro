@@ -1,11 +1,13 @@
 package gui;
 
 import computador.Computador;
+import disco.Disco;
 import hardware.Cpu;
 import kernel.Kernel;
 import metricas.Metricas;
 import modelo.Proceso;
 import modelo.enums.MotivoBloqueo;
+import modelo.enums.TipoPoliticaDisco;
 import planificacion.PoliticaEDF;
 import planificacion.PoliticaFCFS;
 import planificacion.PoliticaPlanificacion;
@@ -38,12 +40,15 @@ import org.jfree.data.xy.XYSeriesCollection;
 public class VistaSimulacion extends JFrame {
 
     private static final String[] NOMBRES_POLITICAS = {"Round Robin", "FCFS", "EDF", "Prioridades"};
-    private static final String[] COLUMNAS_PROCESOS = {"ID", "Proceso", "Tipo", "Estado", "Prioridad", "PC", "MAR",
-        "Restan", "Deadline"};
+    private static final String[] COLUMNAS_PROCESOS = {"ID", "Proceso", "Estado", "Motivo del bloqueo", "Tipo", "Prior.",
+        "PC", "MAR", "Restan", "Deadline"};
+    private static final int[] ANCHOS_PROCESOS = {30, 70, 100, 115, 90, 45, 40, 40, 55, 65};
     private static final String[] COLUMNAS_METRICAS = {"", "Utilización", "Throughput", "Respuesta prom.",
         "Espera prom.", "Cumplimiento", "Equidad (Jain)", "Terminados"};
     private static final String[] COLUMNAS_METRICAS_BUFFERS = {"Buffer", "Elementos producidos",
         "Elementos consumidos"};
+    private static final String[] COLUMNAS_METRICAS_DISCO = {"Indicador", "Valor"};
+    private static final String[] COLUMNAS_POLITICAS_DISCO = {"Política", "Solicitudes atendidas"};
     private static final String[] COLUMNAS_BUFFERS = {"Buffer", "Anfitrión", "Capacidad", "Elementos",
         "mutex", "llenos", "vacíos", "Procesos en espera"};
     private static final int PUNTOS_GRAFICA = 150;
@@ -63,12 +68,18 @@ public class VistaSimulacion extends JFrame {
     // Un panel por computador
     private PanelComputador[] paneles;
 
+    // Disco y archivos (null si el sistema no tiene disco conectado)
+    private PanelDisco panelDisco;
+    private final PanelModoUsuario panelModo = new PanelModoUsuario();
+
     // Buffers
     private final DefaultTableModel modeloBuffers = new DefaultTableModel(COLUMNAS_BUFFERS, 0);
 
     // Métricas
     private final DefaultTableModel modeloMetricas = new DefaultTableModel(COLUMNAS_METRICAS, 0);
     private final DefaultTableModel modeloMetricasBuffers = new DefaultTableModel(COLUMNAS_METRICAS_BUFFERS, 0);
+    private final DefaultTableModel modeloMetricasDisco = new DefaultTableModel(COLUMNAS_METRICAS_DISCO, 0);
+    private final DefaultTableModel modeloPoliticasDisco = new DefaultTableModel(COLUMNAS_POLITICAS_DISCO, 0);
     private final JLabel lblBloqueoSemaforos = new JLabel(" ");
 
     // Log
@@ -80,6 +91,7 @@ public class VistaSimulacion extends JFrame {
     private final XYSeries serieThroughput = new XYSeries("Throughput");
     private final XYSeries serieExito = new XYSeries("Tasa de éxito");
     private final XYSeries serieEspera = new XYSeries("Tiempo de espera");
+    private final XYSeries serieDesplazamiento = new XYSeries("Desplazamiento acumulado");
     private long[] ocupadosPrevios;
     private long[] totalesPrevios;
 
@@ -138,11 +150,21 @@ public class VistaSimulacion extends JFrame {
 
         JPanel fila2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 6));
         JButton btnProceso = new JButton("+ Proceso al vuelo");
-        JButton btnBuffer = new JButton("+ Buffer al vuelo");
         btnProceso.addActionListener(e -> procesoAlVuelo());
-        btnBuffer.addActionListener(e -> bufferAlVuelo());
         fila2.add(btnProceso);
-        fila2.add(btnBuffer);
+        if (sistema.getDisco() == null) {
+            // Solo el Proyecto 1 (sin disco) usa buffers y semáforos
+            JButton btnBuffer = new JButton("+ Buffer al vuelo");
+            btnBuffer.addActionListener(e -> bufferAlVuelo());
+            fila2.add(btnBuffer);
+        }
+        if (sistema.getSistemaArchivos() != null) {
+            JButton btnArchivo = new JButton("+ Proceso de E/S (archivo)");
+            btnArchivo.addActionListener(e -> procesoArchivoAlVuelo());
+            fila2.add(btnArchivo);
+            panelModo.conectar(sistema.getSistemaArchivos(), this::registrar);
+            fila2.add(panelModo);
+        }
 
         JPanel panel = new JPanel(new GridLayout(2, 1));
         panel.add(fila1);
@@ -154,6 +176,26 @@ public class VistaSimulacion extends JFrame {
         JScrollPane scrollSistema = new JScrollPane(new JTable(modeloMetricas));
         scrollSistema.setBorder(BorderFactory.createTitledBorder(
                 "Por computador y del sistema completo (throughput en procesos por ciclo; respuesta y espera en ciclos; cumplimiento de deadlines)"));
+
+        if (sistema.getDisco() != null) {
+            JScrollPane scrollDisco = new JScrollPane(new JTable(modeloMetricasDisco));
+            scrollDisco.setBorder(BorderFactory.createTitledBorder(
+                    "Métricas del disco, swap y planificador de mediano plazo"));
+
+            JScrollPane scrollPoliticas = new JScrollPane(new JTable(modeloPoliticasDisco));
+            scrollPoliticas.setBorder(BorderFactory.createTitledBorder(
+                    "Solicitudes de E/S atendidas por política de disco"));
+
+            JPanel abajoDisco = new JPanel(new GridLayout(1, 2, 5, 5));
+            abajoDisco.add(scrollDisco);
+            abajoDisco.add(scrollPoliticas);
+
+            JPanel panelDiscoMetricas = new JPanel(new GridLayout(2, 1, 5, 5));
+            panelDiscoMetricas.add(scrollSistema);
+            panelDiscoMetricas.add(abajoDisco);
+            return panelDiscoMetricas;
+        }
+
         JScrollPane scrollBuffers = new JScrollPane(new JTable(modeloMetricasBuffers));
         scrollBuffers.setBorder(BorderFactory.createTitledBorder("Productor-consumidor por buffer"));
 
@@ -178,8 +220,15 @@ public class VistaSimulacion extends JFrame {
             pestanas.addTab("Computador " + c.getId(), paneles[i]);
         }
 
-        JTable tablaBuffers = new JTable(modeloBuffers);
-        pestanas.addTab("Buffers y semáforos", new JScrollPane(tablaBuffers));
+        if (sistema.getDisco() != null && sistema.getSistemaArchivos() != null) {
+            panelDisco = new PanelDisco(sistema.getDisco(), sistema.getSistemaArchivos(), this::registrar);
+            pestanas.addTab("Disco y archivos", panelDisco);
+        }
+
+        if (sistema.getDisco() == null) {
+            JTable tablaBuffers = new JTable(modeloBuffers);
+            pestanas.addTab("Buffers y semáforos", new JScrollPane(tablaBuffers));
+        }
         pestanas.addTab("Métricas", construirPanelMetricas());
 
         txtLogs.setEditable(false);
@@ -244,8 +293,32 @@ public class VistaSimulacion extends JFrame {
         JTabbedPane pestanasGraficas = new JTabbedPane();
         pestanasGraficas.addTab("Utilización de CPU", panelUtilizacion);
         pestanasGraficas.addTab("Throughput, tasa de éxito y espera", panelRendimiento);
-        pestanasGraficas.setPreferredSize(new Dimension(1100, 230));
-        add(pestanasGraficas, BorderLayout.SOUTH);
+        if (sistema.getDisco() != null) {
+            ChartPanel panelDesplazamiento = crearGraficaSerie(
+                    serieDesplazamiento,
+                    "Desplazamiento acumulado del cabezal",
+                    "Bloques recorridos",
+                    false);
+            pestanasGraficas.addTab("Desplazamiento del cabezal", panelDesplazamiento);
+        }
+        pestanasGraficas.setPreferredSize(new Dimension(1100, 200));
+        pestanasGraficas.setMinimumSize(new Dimension(300, 90));
+
+        // La zona central y las gráficas se separan con un divisor que se puede arrastrar
+        // para dar más espacio al disco (o a las gráficas) según lo que se quiera ver.
+        Component centro = ((BorderLayout) getContentPane().getLayout()).getLayoutComponent(BorderLayout.CENTER);
+        remove(centro);
+        JSplitPane vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, centro, pestanasGraficas);
+        vertical.setResizeWeight(1.0);
+        vertical.setContinuousLayout(true);
+        add(vertical, BorderLayout.CENTER);
+        // al mostrarse la ventana, las gráficas arrancan con ~260 px de alto
+        addComponentListener(new java.awt.event.ComponentAdapter() {
+            @Override
+            public void componentShown(java.awt.event.ComponentEvent e) {
+                SwingUtilities.invokeLater(() -> vertical.setDividerLocation(Math.max(250, vertical.getHeight() - 260)));
+            }
+        });
     }
 
     private ChartPanel crearGraficaSerie(XYSeries serie, String titulo, String ejeY, boolean porcentaje) {
@@ -335,6 +408,22 @@ public class VistaSimulacion extends JFrame {
             numeros[i] = String.valueOf(i + 1);
         }
         return numeros;
+    }
+
+    private void procesoArchivoAlVuelo() {
+        int ram = sistema.getComputador(1).getKernel().getMemoria().getCapacidadTotal();
+        Proceso p = DialogoProcesoArchivo.mostrar(this, sistema.getSistemaArchivos(), ram,
+                sistema.getTodosLosProcesos().length + 1);
+        if (p == null) {
+            return;
+        }
+        if (!sistema.enviarProceso(p)) {
+            JOptionPane.showMessageDialog(this, "No se pudo enviar el proceso al computador.",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        registrar("Proceso de E/S " + p.getNombre() + " (" + p.getOperacion() + " " + p.getRutaArchivo()
+                + ") creado por " + p.getUsuarioSolicitante() + ".");
     }
 
     private void procesoAlVuelo() {
@@ -463,6 +552,9 @@ public class VistaSimulacion extends JFrame {
         }
         actualizarBuffers();
         actualizarMetricas(ciclo);
+        if (panelDisco != null) {
+            panelDisco.actualizar();
+        }
     }
 
     private static String formato(double valor, String patron) {
@@ -496,6 +588,11 @@ public class VistaSimulacion extends JFrame {
             serieEspera.add((double) ciclo, Metricas.tiempoEsperaPromedio(terminadosSistema));
         }
 
+        if (sistema.getDisco() != null) {
+            actualizarMetricasDisco(ciclo);
+            return;
+        }
+
         modeloMetricasBuffers.setRowCount(0);
         for (int i = 0; i < sistema.getCantidadBuffers(); i++) {
             String id = String.valueOf(sistema.getBufferEn(i).getId());
@@ -507,6 +604,68 @@ public class VistaSimulacion extends JFrame {
         }
         lblBloqueoSemaforos.setText("  Tiempo promedio que los procesos pasan bloqueados en semáforos: "
                 + formato(Metricas.tiempoPromedioBloqueoSemaforos(todos), "%.2f") + " ciclos");
+    }
+
+    private void actualizarMetricasDisco(long ciclo) {
+        Disco disco = sistema.getDisco();
+        if (disco == null) {
+            return;
+        }
+
+        long suspensiones = 0;
+        long reactivaciones = 0;
+        for (int i = 0; i < sistema.getCantidadComputadores(); i++) {
+            Kernel k = sistema.getComputador(i + 1).getKernel();
+            suspensiones += k.getSuspensiones();
+            reactivaciones += k.getReactivaciones();
+        }
+
+        modeloMetricasDisco.setRowCount(0);
+        modeloMetricasDisco.addRow(new Object[]{
+            "Desplazamiento total del cabezal",
+            disco.getDesplazamientoTotal() + " bloques"
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Tiempo de espera promedio (E/S)",
+            formato(disco.getTiempoEsperaPromedio(), "%.2f") + " ciclos"
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Solicitudes de E/S atendidas",
+            String.valueOf(disco.getSolicitudesAtendidas())
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Bloques libres / Swap libre",
+            disco.contarBloquesLibres(false) + " libres  |  "
+                    + disco.contarBloquesLibres(true) + " / " + disco.getBloquesSwap() + " swap"
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Suspensiones (mediano plazo)",
+            String.valueOf(suspensiones)
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Reactivaciones (mediano plazo)",
+            String.valueOf(reactivaciones)
+        });
+        modeloMetricasDisco.addRow(new Object[]{
+            "Procesos rechazados",
+            String.valueOf(sistema.getRechazos())
+        });
+
+        modeloPoliticasDisco.setRowCount(0);
+        TipoPoliticaDisco[] politicas = TipoPoliticaDisco.values();
+        for (int i = 0; i < politicas.length; i++) {
+            TipoPoliticaDisco tipo = politicas[i];
+            modeloPoliticasDisco.addRow(new Object[]{
+                tipo.name(),
+                String.valueOf(disco.getAtendidasPorPolitica(tipo))
+            });
+        }
+        modeloPoliticasDisco.addRow(new Object[]{
+            "Total atendidas",
+            String.valueOf(disco.getSolicitudesAtendidas())
+        });
+
+        serieDesplazamiento.add((double) ciclo, (double) disco.getDesplazamientoTotal());
     }
 
     private Object[] filaMetricas(String nombre, double utilizacion, Proceso[] terminados, long ciclo) {
@@ -595,14 +754,13 @@ public class VistaSimulacion extends JFrame {
         for (int i = 0; i < procesos.length; i++) {
             Proceso p = procesos[i];
             String estado = String.valueOf(p.getEstado());
-            if (p.getMotivoBloqueo() != MotivoBloqueo.NINGUNO) {
-                estado = estado + " (" + p.getMotivoBloqueo() + ")";
-            }
+            String motivo = (p.getMotivoBloqueo() == MotivoBloqueo.NINGUNO) ? "-" : String.valueOf(p.getMotivoBloqueo());
             modelo.addRow(new Object[]{
                 p.getId(),
                 p.getNombre(),
-                p.getTipo(),
                 estado,
+                motivo,
+                p.getTipo(),
                 p.getPrioridad(),
                 p.getPc(),
                 p.getMar(),
@@ -628,6 +786,28 @@ public class VistaSimulacion extends JFrame {
     // ------------------------------------------------------------------
     // Panel de un computador: estado, controles en caliente y 4 colas
     // ------------------------------------------------------------------
+    /** Texto que se muestra para el modo de la CPU. */
+    private static String nombreModo(modelo.enums.ModoCpu modo) {
+        if (modo == modelo.enums.ModoCpu.SISTEMA_OPERATIVO) {
+            return "MODO KERNEL (sistema operativo)";
+        }
+        if (modo == modelo.enums.ModoCpu.USUARIO) {
+            return "MODO USUARIO";
+        }
+        return "CPU OCIOSA";
+    }
+
+    /** Color del texto: rojo en modo kernel, verde en modo usuario, gris si está ociosa. */
+    private static Color colorModo(modelo.enums.ModoCpu modo) {
+        if (modo == modelo.enums.ModoCpu.SISTEMA_OPERATIVO) {
+            return new Color(0xB00020);
+        }
+        if (modo == modelo.enums.ModoCpu.USUARIO) {
+            return new Color(0x1B6E2E);
+        }
+        return Color.GRAY;
+    }
+
     private class PanelComputador extends JPanel {
 
         private final Computador computador;
@@ -639,6 +819,8 @@ public class VistaSimulacion extends JFrame {
         private final DefaultTableModel mNuevos = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
         private final DefaultTableModel mListos = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
         private final DefaultTableModel mBloqueados = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
+        private final DefaultTableModel mListosSusp = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
+        private final DefaultTableModel mBloqueadosSusp = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
         private final DefaultTableModel mTerminados = new DefaultTableModel(COLUMNAS_PROCESOS, 0);
 
         PanelComputador(Computador computador) {
@@ -674,16 +856,23 @@ public class VistaSimulacion extends JFrame {
             norte.add(controles, BorderLayout.SOUTH);
             add(norte, BorderLayout.NORTH);
 
-            JPanel colas = new JPanel(new GridLayout(2, 2, 5, 5));
-            colas.add(tabla("Nuevos", mNuevos));
+            JPanel colas = new JPanel(new GridLayout(2, 3, 5, 5));
+            colas.add(tabla("Nuevos (cola a largo plazo)", mNuevos));
             colas.add(tabla("Listos", mListos));
             colas.add(tabla("Bloqueados", mBloqueados));
+            colas.add(tabla("Listos/Suspendidos", mListosSusp));
+            colas.add(tabla("Bloqueados/Suspendidos", mBloqueadosSusp));
             colas.add(tabla("Terminados", mTerminados));
             add(colas, BorderLayout.CENTER);
         }
 
         private JScrollPane tabla(String titulo, DefaultTableModel modelo) {
-            JScrollPane scroll = new JScrollPane(new JTable(modelo));
+            JTable tablaProcesos = new JTable(modelo);
+            tablaProcesos.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+            for (int i = 0; i < ANCHOS_PROCESOS.length; i++) {
+                tablaProcesos.getColumnModel().getColumn(i).setPreferredWidth(ANCHOS_PROCESOS[i]);
+            }
+            JScrollPane scroll = new JScrollPane(tablaProcesos);
             scroll.setBorder(BorderFactory.createTitledBorder(titulo));
             return scroll;
         }
@@ -761,7 +950,9 @@ public class VistaSimulacion extends JFrame {
                     ? "libre"
                     : enCpu.getNombre() + " (prioridad " + enCpu.getPrioridad() + ", deadline " + enCpu.getDeadline()
                     + ")  PC=" + cpu.getPc() + "  MAR=" + cpu.getMar();
-            lblCpu.setText("CPU: modo " + cpu.getModo() + "  |  proceso en CPU: " + detalle);
+            modelo.enums.ModoCpu modo = cpu.getModo();
+            lblCpu.setText("CPU: " + nombreModo(modo) + "  |  proceso en CPU: " + detalle);
+            lblCpu.setForeground(colorModo(modo));
 
             lblMemoria.setText("RAM: " + kernel.getMemoria().getUsada() + " / "
                     + kernel.getMemoria().getCapacidadTotal() + " ocupada");
@@ -769,6 +960,8 @@ public class VistaSimulacion extends JFrame {
             llenarTabla(mNuevos, kernel.obtenerNuevos());
             llenarTabla(mListos, kernel.obtenerListos());
             llenarTabla(mBloqueados, kernel.obtenerBloqueados());
+            llenarTabla(mListosSusp, kernel.obtenerListosSuspendidos());
+            llenarTabla(mBloqueadosSusp, kernel.obtenerBloqueadosSuspendidos());
             llenarTabla(mTerminados, kernel.obtenerTerminados());
         }
     }
